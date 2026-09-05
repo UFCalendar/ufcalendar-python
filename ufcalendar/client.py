@@ -75,7 +75,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.1.0",
+                "User-Agent": "ufcalendar-python/0.1.1",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -155,7 +155,7 @@ class FightAPI:
         return self.get(f"events/{id_or_slug}")
 
     def event_changes(self, id_or_slug: str) -> List[Dict[str, Any]]:
-        """Card-change diff log (fight added/removed, opponent swapped, date moved)."""
+        """Card-change diff log (fight added/removed, opponent swapped, date moved, fighter profile merged)."""
         return self.get(f"events/{id_or_slug}/changes")
 
     # ---------------------------------------------------------------- fights
