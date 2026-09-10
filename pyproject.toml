@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ufcalendar"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python client for the UFCalendar Fight API: UFC, PFL, OKTAGON, BKFC and RIZIN events, fight cards, results, per-round stats, fighter careers and UFC rankings history since 2013."
 readme = "README.md"
 license = { text = "MIT" }

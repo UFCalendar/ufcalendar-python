@@ -75,7 +75,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.1.1",
+                "User-Agent": "ufcalendar-python/0.1.2",
             },
             timeout=self._timeout,
             allow_redirects=True,
