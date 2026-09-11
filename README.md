@@ -46,6 +46,8 @@ history = api.fighter_history("islam-makhachev")
 | `events(org, status, from_date, to_date, order)` | `GET /v1/events` (paginated) |
 | `event(slug)` / `event_changes(slug)` | `GET /v1/events/{slug}` / `…/changes` |
 | `fight(id)` / `fight_stats(id)` / `fight_rounds(id)` | `GET /v1/fights/{id}` / `…/stats` / `…/rounds` |
+| `fight_scorecards(id)` | `GET /v1/fights/{id}/scorecards` — judges, rounds, totals, deductions |
+| `judges(q, org, min_fights)` / `judge(id)` / `judge_scorecards(id)` | `GET /v1/judges` / `…/{id}` / `…/{id}/scorecards` |
 | `fighters(q, org, country)` / `fighter(slug)` | `GET /v1/fighters` / `…/{slug}` |
 | `fighter_history` / `fighter_stats` / `fighter_rankings` / `fighter_power_index` | `GET /v1/fighters/{slug}/…` |
 | `rankings(org, date)` / `division_rankings(org, division)` / `champions()` | `GET /v1/rankings/…` / `/v1/champions` |

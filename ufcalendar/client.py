@@ -75,7 +75,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.1.2",
+                "User-Agent": "ufcalendar-python/0.2.0",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -170,6 +170,57 @@ class FightAPI:
     def fight_rounds(self, fight_id: int) -> List[Dict[str, Any]]:
         """Round-by-round stat lines for both corners."""
         return self.get(f"fights/{fight_id}/rounds")
+
+    def fight_scorecards(self, fight_id: int) -> Dict[str, Any]:
+        """The judges' scorecards for a bout — the official commission record.
+
+        Returns the decision type, any point deductions, and one card per
+        judge with their score for every round, their totals, and
+        ``winner_fighter_id`` (who *that* judge gave it to). Scores are
+        oriented to ``fighter_a_id``/``fighter_b_id``, both repeated on the
+        payload.
+
+        Check ``scores_known`` on a card before charting totals: when it is
+        false the commission published only the outcome, so the totals are a
+        1-0 / 1-1 / 0-0 placeholder and ``rounds`` is empty. Raises
+        :class:`APIError` (404) for a bout that did not go to the judges.
+        """
+        return self.get(f"fights/{fight_id}/scorecards")
+
+    # --------------------------------------------------------------- judges
+
+    def judges(
+        self,
+        q: Optional[str] = None,
+        *,
+        org: Optional[str] = None,
+        min_fights: Optional[int] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Every official who has scored a launch-org bout, busiest first.
+
+        Each row carries career shape: fights, rounds scored, rounds scored
+        10-8 or wider, three-judge cards that came back split, and
+        ``lone_dissents`` — cards where this judge alone picked the other
+        corner. Rates mean little below ~10 fights; pass ``min_fights=10``.
+        """
+        return self._paginate(
+            "judges", {"q": q, "org": org, "min_fights": min_fights}, limit
+        )
+
+    def judge(self, judge_id: int) -> Dict[str, Any]:
+        """One official's career aggregates."""
+        return self.get(f"judges/{judge_id}")
+
+    def judge_scorecards(
+        self, judge_id: int, *, limit: Optional[int] = None
+    ) -> Iterator[Dict[str, Any]]:
+        """Every card this judge has turned in, newest first.
+
+        Each entry is the bout, its event, the decision type and this judge's
+        own card. For the full panel on one bout use :meth:`fight_scorecards`.
+        """
+        return self._paginate(f"judges/{judge_id}/scorecards", {}, limit)
 
     # -------------------------------------------------------------- fighters
 

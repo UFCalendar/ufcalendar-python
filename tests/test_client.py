@@ -80,3 +80,47 @@ def test_webhook_create_body():
 def test_ics_url_carries_key():
     api = FightAPI("ufcalendar_test", session=_Session([]))
     assert api.calendar_ics_url("ufc") == "https://api.ufcalendar.com/v1/calendar/ufc.ics?key=ufcalendar_test"
+
+
+def test_fight_scorecards_unwraps_the_card():
+    s = _Session([
+        _Resp(200, {"data": {
+            "fight_id": 83379, "fighter_a_id": 11402, "fighter_b_id": 9166,
+            "decision_type": "split", "deductions": [],
+            "cards": [{"judge_id": 36, "judge_name": "Vito Paolillo",
+                       "total_a": 28, "total_b": 29, "winner_fighter_id": 9166,
+                       "is_draw": False, "scores_known": True,
+                       "rounds": [{"round": 1, "a": 9, "b": 10}]}],
+        }}),
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    out = api.fight_scorecards(83379)
+    assert s.calls[0][1].endswith("/v1/fights/83379/scorecards")
+    assert out["decision_type"] == "split"
+    assert out["cards"][0]["winner_fighter_id"] == 9166
+
+
+def test_judges_paginates_and_drops_none_params():
+    s = _Session([
+        _Resp(200, {"data": [{"id": 5, "name": "Sal D'Amato"}],
+                    "meta": {"pagination": {"next_cursor": "c2"}}}),
+        _Resp(200, {"data": [{"id": 7, "name": "Derek Cleary"}],
+                    "meta": {"pagination": {"next_cursor": None}}}),
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    rows = list(api.judges(org="ufc", min_fights=10))
+    assert [r["id"] for r in rows] == [5, 7]
+    # q is None and must not be sent at all
+    assert s.calls[0][2] == {"org": "ufc", "min_fights": 10, "limit": 100}
+    assert s.calls[1][2]["cursor"] == "c2"
+
+
+def test_judge_scorecards_path():
+    s = _Session([
+        _Resp(200, {"data": [{"fight_id": 1, "card": {"judge_id": 36}}],
+                    "meta": {"pagination": {"next_cursor": None}}}),
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    rows = list(api.judge_scorecards(36))
+    assert s.calls[0][1].endswith("/v1/judges/36/scorecards")
+    assert rows[0]["card"]["judge_id"] == 36
