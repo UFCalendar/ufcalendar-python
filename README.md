@@ -1,6 +1,6 @@
 # ufcalendar — Python client for the UFCalendar Fight API
 
-The [UFCalendar Fight API](https://www.ufcalendar.com/developers) is a REST API for MMA data: **UFC, PFL, OKTAGON, BKFC and RIZIN** events, full fight cards, results within minutes, per-fight and round-by-round statistics, complete fighter careers, and the only **UFC rankings API with point-in-time history back to 2013**. This package is a thin `requests` wrapper over it — one method per endpoint, cursor pagination handled for you.
+The [UFCalendar Fight API](https://www.ufcalendar.com/developers) is a REST API for MMA data: **UFC, PFL, OKTAGON, BKFC and RIZIN** events, full fight cards, results within minutes, per-fight and round-by-round statistics, complete fighter careers, the only **UFC rankings API with point-in-time history back to 2013**, and the only one serving **judges' scorecards** — every official, every round: UFC back to 1995, PFL to 2018, OKTAGON to 2025 and RIZIN from March 2026. This package is a thin `requests` wrapper over it — one method per endpoint, cursor pagination handled for you.
 
 ```bash
 pip install ufcalendar
