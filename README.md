@@ -6,7 +6,7 @@ The [UFCalendar Fight API](https://www.ufcalendar.com/developers) is a REST API 
 pip install ufcalendar
 ```
 
-Get a key (free 1-day trial, 100 requests, no card) at https://www.ufcalendar.com/account/api?trial=1. Paid plans from $19/month, hard caps, no overage.
+Get a key (free 1-day trial, 100 requests, no card) at https://www.ufcalendar.com/account/api?trial=1. Paid plans from $19/month for 30,000 requests (Pro $49 for 200,000, Business $149 for 1,000,000), hard caps, no overage.
 
 ## Quickstart
 
