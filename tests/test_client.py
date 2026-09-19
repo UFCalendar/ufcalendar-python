@@ -49,6 +49,20 @@ def test_events_paginates_and_drops_none_params():
     assert api.last_rate_limit["remaining"] is None  # last call carried no header
 
 
+def test_plans_is_a_plain_get():
+    """/v1/plans answers without a credential; the client still sends its key."""
+    s = _Session([
+        _Resp(200, {"data": {"currency": "USD", "plans": [{"key": "hobby"}],
+                             "mcp": {"url": "https://api.ufcalendar.com/mcp"}}})
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    data = api.plans()
+    assert s.calls[0][0] == "GET"
+    assert s.calls[0][1].endswith("/v1/plans")
+    assert data["plans"][0]["key"] == "hobby"
+    assert data["mcp"]["url"].endswith("/mcp")
+
+
 def test_rankings_date_param():
     s = _Session([_Resp(200, {"data": {"snapshot_date": "2016-11-07", "divisions": []}})])
     api = FightAPI("ufcalendar_test", session=s)

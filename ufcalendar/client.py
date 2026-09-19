@@ -75,7 +75,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.2.1",
+                "User-Agent": "ufcalendar-python/0.3.0",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -117,6 +117,17 @@ class FightAPI:
             if not cursor:
                 return
             params["cursor"] = cursor
+
+    # ----------------------------------------------------------------- plans
+
+    def plans(self) -> Dict[str, Any]:
+        """Plans, quotas, the free 1-day trial rule, the MCP endpoint and the doc links.
+
+        The only endpoint that answers without a credential (the client still
+        sends its key header — harmless). Useful for showing a caller what a
+        higher tier would buy them before they upgrade.
+        """
+        return self.get("plans")
 
     # ------------------------------------------------------------------ orgs
 

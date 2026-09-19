@@ -43,6 +43,7 @@ history = api.fighter_history("islam-makhachev")
 
 | Method | Endpoint |
 |---|---|
+| `plans()` | `GET /v1/plans` — plans, quotas, trial terms, MCP endpoint (no key required) |
 | `events(org, status, from_date, to_date, order)` | `GET /v1/events` (paginated) |
 | `event(slug)` / `event_changes(slug)` | `GET /v1/events/{slug}` / `…/changes` |
 | `fight(id)` / `fight_stats(id)` / `fight_rounds(id)` | `GET /v1/fights/{id}` / `…/stats` / `…/rounds` |
@@ -56,7 +57,7 @@ history = api.fighter_history("islam-makhachev")
 | `create_webhook_endpoint(url, events)` … | `POST /v1/webhook-endpoints` (Pro+) |
 | `calendar_ics_url(org)` | `GET /v1/calendar/{org}.ics` |
 
-Full reference: https://api.ufcalendar.com/docs · OpenAPI 3.1: https://api.ufcalendar.com/openapi.json · Also on [RapidAPI Hub](https://rapidapi.com/ceo-SP8r6F1JT/api/ufc-and-mma-fight-data-by-ufcalendar) and [Postman](https://www.postman.com/ceo-5d84eedc/workspace/ufcalendar-fight-api)
+Full reference: https://api.ufcalendar.com/docs · OpenAPI 3.1: https://api.ufcalendar.com/openapi.json · Also on [npm (TypeScript client)](https://www.npmjs.com/package/@ufcalendar/sdk), [RapidAPI Hub](https://rapidapi.com/ceo-SP8r6F1JT/api/ufc-and-mma-fight-data-by-ufcalendar) and [Postman](https://www.postman.com/ceo-5d84eedc/workspace/ufcalendar-fight-api)
 
 ## Webhooks instead of polling (Pro and up)
 
