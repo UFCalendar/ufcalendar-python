@@ -13,12 +13,18 @@ receive must be displayed as a credit.
 
 from __future__ import annotations
 
+import contextlib
+import json as _json
 import os
-from typing import Any, Dict, Iterator, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence
+from urllib.parse import quote
 
 import requests
 
 DEFAULT_BASE_URL = "https://api.ufcalendar.com/v1"
+#: The live WebSocket (UFC fight nights, Pro plans and up). Same document as
+#: ``GET /v1/events/{id}/live``, pushed on every change.
+LIVE_WS_URL = "wss://live.ufcalendar.com/v1"
 _TIMEOUT = 30
 
 
@@ -31,6 +37,18 @@ class FightAPIError(Exception):
         self.code = code
         self.message = message
         self.request_id = request_id
+
+
+def _connect_websocket(url: str) -> Any:
+    """Open the live socket with the optional ``websocket-client`` dependency."""
+    try:
+        from websocket import create_connection  # type: ignore[import-not-found]
+    except ImportError as exc:  # pragma: no cover - exercised with a patched import
+        raise ImportError(
+            "live_stream() needs a WebSocket client, which ships as an optional extra. "
+            "Install it with: pip install 'ufcalendar[live]'"
+        ) from exc
+    return create_connection(url, timeout=_TIMEOUT)
 
 
 class FightAPI:
@@ -75,7 +93,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.4.1",
+                "User-Agent": "ufcalendar-python/0.5.0",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -170,10 +188,74 @@ class FightAPI:
         return self.get(f"events/{id_or_slug}/changes")
 
     def event_live(self, id_or_slug: str) -> Optional[Dict[str, Any]]:
-        """Latest real-time LiveState snapshot on fight night (Business+), or None
-        when nothing is being streamed. The WebSocket at wss://live.ufcalendar.com/v1
-        pushes the same document as it changes."""
+        """Latest real-time LiveState snapshot on fight night (Pro plans and up),
+        or None when nothing is being streamed. The WebSocket at
+        wss://live.ufcalendar.com/v1 pushes the same document as it changes —
+        see :meth:`live_stream`."""
         return self.get(f"events/{id_or_slug}/live")
+
+    def live_stream(
+        self,
+        event: str,
+        *,
+        until_final: bool = False,
+        url: str = LIVE_WS_URL,
+        connect: Optional[Callable[[str], Any]] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Subscribe to the live WebSocket and yield every frame (Pro plans and up).
+
+        The UFC live API: connects to ``wss://live.ufcalendar.com/v1?key=…``,
+        sends ``{"action": "subscribe", "event": <slug>}`` and yields each
+        frame as a dict — ``{"type": "snapshot" | "update" | "fight.final" |
+        "event.completed", "data": <LiveState>}``. ``data`` carries the round,
+        the running clock, unofficial in-fight statistics and the action
+        timeline: the same document :meth:`event_live` returns as a snapshot.
+
+            for frame in api.live_stream("ufc-331", until_final=True):
+                print(frame["type"])
+
+        :param event: event slug, our event id, or the UFC fmid.
+        :param until_final: stop after the first ``fight.final`` frame.
+            Default False — the generator runs until the socket ends.
+        :param connect: inject a connector for tests. Defaults to
+            ``websocket.create_connection`` from the optional ``websocket-client``
+            dependency: ``pip install 'ufcalendar[live]'``.
+
+        A dropped socket is reconnected (and re-subscribed) ONCE; a second
+        drop raises, so a caller that wants an all-night ticker should wrap
+        this in its own retry loop.
+        """
+        opener = connect or _connect_websocket
+        target = f"{url}?key={quote(self.api_key, safe='')}"
+        reconnects = 0
+        while True:
+            sock = opener(target)
+            try:
+                sock.send(_json.dumps({"action": "subscribe", "event": event}))
+                while True:
+                    raw = sock.recv()
+                    if raw is None or raw == "" or raw == b"":
+                        raise ConnectionError("live stream closed by the server")
+                    if isinstance(raw, (bytes, bytearray)):
+                        raw = raw.decode("utf-8", "replace")
+                    try:
+                        frame = _json.loads(raw)
+                    except ValueError:
+                        continue  # a half-frame is not worth killing the night over
+                    if not isinstance(frame, dict):
+                        continue
+                    yield frame
+                    if until_final and frame.get("type") == "fight.final":
+                        return
+            except GeneratorExit:
+                raise
+            except Exception:
+                if reconnects >= 1:
+                    raise
+                reconnects += 1
+            finally:
+                with contextlib.suppress(Exception):
+                    sock.close()
 
     # ---------------------------------------------------------------- fights
 
