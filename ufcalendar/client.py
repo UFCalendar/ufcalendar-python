@@ -75,7 +75,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.3.0",
+                "User-Agent": "ufcalendar-python/0.4.0",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -168,6 +168,12 @@ class FightAPI:
     def event_changes(self, id_or_slug: str) -> List[Dict[str, Any]]:
         """Card-change diff log (fight added/removed, opponent swapped, date moved, fighter profile merged)."""
         return self.get(f"events/{id_or_slug}/changes")
+
+    def event_live(self, id_or_slug: str) -> Optional[Dict[str, Any]]:
+        """Latest real-time LiveState snapshot on fight night (Business+), or None
+        when nothing is being streamed. The WebSocket at wss://live.ufcalendar.com/v1
+        pushes the same document as it changes."""
+        return self.get(f"events/{id_or_slug}/live")
 
     # ---------------------------------------------------------------- fights
 

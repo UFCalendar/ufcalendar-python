@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ufcalendar"
-version = "0.3.0"
+version = "0.4.0"
 description = "Python client for the UFCalendar Fight API: UFC, PFL, OKTAGON, BKFC and RIZIN events, fight cards, results, per-round stats, fighter careers and UFC rankings history since 2013."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
 authors = [{ name = "UFCalendar", email = "api@ufcalendar.com" }]
-keywords = ["ufc", "mma", "api", "ufc-api", "mma-api", "sports-data", "fight-data", "rankings", "bkfc", "pfl"]
+keywords = ["ufc", "mma", "api", "ufc-api", "mma-api", "sports-data", "fight-data", "rankings", "bkfc", "pfl", "mcp", "mcp-server", "ufc-mcp", "mma-mcp", "fight-api"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
