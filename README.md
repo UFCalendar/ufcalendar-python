@@ -46,6 +46,7 @@ history = api.fighter_history("islam-makhachev")
 | `plans()` | `GET /v1/plans` — plans, quotas, trial terms, MCP endpoint (no key required) |
 | `events(org, status, from_date, to_date, order)` | `GET /v1/events` (paginated) |
 | `event(slug)` / `event_changes(slug)` | `GET /v1/events/{slug}` / `…/changes` |
+| `event_live(slug)` | `GET /v1/events/{slug}/live` — real-time LiveState on fight night (Pro+); the same document streams over `wss://live.ufcalendar.com/v1?key=…` |
 | `fight(id)` / `fight_stats(id)` / `fight_rounds(id)` | `GET /v1/fights/{id}` / `…/stats` / `…/rounds` |
 | `fight_scorecards(id)` | `GET /v1/fights/{id}/scorecards` — judges, rounds, totals, deductions |
 | `judges(q, org, min_fights)` / `judge(id)` / `judge_scorecards(id)` | `GET /v1/judges` / `…/{id}` / `…/{id}/scorecards` |
