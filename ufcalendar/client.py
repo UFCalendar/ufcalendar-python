@@ -6,7 +6,10 @@ cursor pagination for you. Errors raise :class:`FightAPIError` carrying the
 API's ``code``, ``message`` and ``request_id`` (quote the request id when
 you write to api@ufcalendar.com).
 
-The API serves no betting odds, by design. Fighter ``images`` are Wikimedia
+Odds are the UFCalendar consensus line: one anonymised line per corner across
+the sportsbooks we track (``sources`` = how many books backed each point; book
+identities are never exposed). Information only, not betting advice. Fighter
+``images`` are Wikimedia
 Commons / Creative Commons files — the ``license`` and ``artist`` fields you
 receive must be displayed as a credit.
 """
@@ -100,7 +103,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.6.1",
+                "User-Agent": "ufcalendar-python/0.7.0",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -160,7 +163,7 @@ class FightAPI:
     # ------------------------------------------------------------------ orgs
 
     def orgs(self) -> List[Dict[str, Any]]:
-        """Launch orgs with capability flags (stats / rounds / rankings / broadcasts / predictions)."""
+        """Launch orgs with capability flags (stats / rounds / rankings / broadcasts / predictions / scorecards / odds)."""
         return self.get("orgs")
 
     def org(self, slug: str) -> Dict[str, Any]:
@@ -212,7 +215,9 @@ class FightAPI:
 
     def event(self, id_or_slug: str, *, include: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """One event with its full fight card, venue and broadcasts.
-        ``include=["eta"]`` adds an estimated start time to every bout."""
+        ``include=["eta"]`` adds an estimated start time to every bout;
+        ``include=["odds"]`` adds each bout's latest UFCalendar consensus line
+        (``None`` when unpriced). Pass both as ``["eta", "odds"]``."""
         return self.get(f"events/{id_or_slug}", include=",".join(include) if include else None)
 
     def event_watch(self, id_or_slug: str, *, country: Optional[str] = None) -> Dict[str, Any]:
@@ -237,6 +242,16 @@ class FightAPI:
         a; ``None`` when nobody picked), in card order. Crowd sentiment from
         our own pick'em game, not a market and not a forecast."""
         return self.get(f"events/{id_or_slug}/pickem")
+
+    def event_odds(self, id_or_slug: str) -> Dict[str, Any]:
+        """The UFCalendar consensus odds for every non-cancelled bout on one
+        card, in card order: ``consensus`` (latest point), ``opening``,
+        ``closing`` (settled bouts), ``movement`` and ``points``. Unpriced
+        bouts stay on the list with ``None`` and ``points == 0``;
+        ``last_meta["priced"]`` / ``["unpriced"]`` count both. Consensus
+        across the sportsbooks we track, book identities never exposed.
+        Information only, not betting advice."""
+        return self.get(f"events/{id_or_slug}/odds")
 
     def event_changes(self, id_or_slug: str) -> List[Dict[str, Any]]:
         """Card-change diff log (fight added/removed, opponent swapped, date moved, fighter profile merged)."""
@@ -332,8 +347,45 @@ class FightAPI:
 
     # ---------------------------------------------------------------- fights
 
-    def fight(self, fight_id: int) -> Dict[str, Any]:
-        return self.get(f"fights/{fight_id}")
+    def fight(self, fight_id: int, *, include: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+        """One bout with its result and a compact ``event``.
+        ``include=["odds"]`` adds ``odds``: the latest consensus line (or ``None``)."""
+        return self.get(f"fights/{fight_id}", include=",".join(include) if include else None)
+
+    def fight_odds(self, fight_id: int) -> Dict[str, Any]:
+        """The UFCalendar consensus line for one bout.
+
+        ``consensus`` is the latest point, ``opening`` the first we recorded,
+        ``closing`` the last point at or before the event start (settled bouts
+        only), ``movement`` the opening → consensus shift in implied-probability
+        points on corner a. Every point carries ``a`` / ``b`` (``american``,
+        ``decimal``, ``implied_probability``), ``favourite``,
+        ``fair_probability_a`` and ``sources`` (how many sportsbooks backed it;
+        book identities are never exposed). An unpriced bout returns ``None``
+        blocks with ``points == 0``. Information only, not betting advice.
+        """
+        return self.get(f"fights/{fight_id}/odds")
+
+    def fight_odds_history(
+        self,
+        fight_id: int,
+        *,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Every consensus point for one bout, oldest first (Pro plans and up).
+
+        A point is stored only when the consensus moves, so the timestamps
+        follow the market, not our refresh cadence. ``from_date`` /
+        ``to_date`` are inclusive ``YYYY-MM-DD``. Below Pro the API answers
+        403 ``tier_required`` (raised as :class:`FightAPIError`).
+        """
+        return self._paginate(
+            f"fights/{fight_id}/odds/history",
+            {"from": from_date, "to": to_date},
+            limit,
+        )
 
     def fight_stats(self, fight_id: int) -> List[Dict[str, Any]]:
         """Per-fight totals for both corners."""
@@ -674,7 +726,9 @@ class FightAPI:
 
     def create_webhook_endpoint(self, url: str, events: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """Register a signed webhook (Pro and up). ``events`` ⊆
-        ``event.announced``, ``fight.result``, ``card.changed``, ``event.completed``.
+        ``event.announced``, ``fight.result``, ``card.changed``, ``event.completed``,
+        ``odds.moved`` (the consensus line on an upcoming bout moved 5+
+        implied-probability points or the favourite flipped).
         The signing secret is returned ONCE in the response."""
         body: Dict[str, Any] = {"url": url}
         if events:

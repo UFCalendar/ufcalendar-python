@@ -392,3 +392,67 @@ def test_matchmaker_and_whos_next():
     nxt = api.whos_next("islam-makhachev")
     assert s.calls[1][1].endswith("/v1/matchmaker/next/islam-makhachev")
     assert nxt["suggestions"][0]["score"] == 88
+
+
+_PAIR = {
+    "a": {"american": 131, "decimal": 2.31, "implied_probability": 0.4329},
+    "b": {"american": -152, "decimal": 1.658, "implied_probability": 0.6032},
+    "favourite": "b", "fair_probability_a": 0.4178, "sources": 24,
+    "recorded_at": "2026-08-29T10:50:34.350Z",
+}
+
+
+def test_fight_odds_event_odds_and_include():
+    s = _Session([
+        _Resp(200, {"data": {"fight_id": 83379, "consensus": _PAIR, "opening": _PAIR, "closing": _PAIR,
+                             "movement": {"delta_points_a": 9.28, "direction": "a", "since": "2026-08-18T22:50:43.418Z"},
+                             "points": 57, "updated_at": "2026-08-29T10:50:34.350Z"},
+                    "meta": {"note": "Information only, not betting advice.", "checked_at": None,
+                             "history": "/v1/fights/83379/odds/history"}}),
+        _Resp(200, {"data": {"event": {"slug": "ufc-2025-11-15"}, "fights": [{"fight_id": 1, "consensus": None, "points": 0}]},
+                    "meta": {"priced": 0, "unpriced": 1}}),
+        _Resp(200, {"data": {"id": 83379, "odds": _PAIR}}),
+        _Resp(200, {"data": {"slug": "ufc-2025-11-15", "card": [{"id": 1, "odds": None}]}}),
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    o = api.fight_odds(83379)
+    assert s.calls[0][1].endswith("/v1/fights/83379/odds")
+    assert o["consensus"]["sources"] == 24
+    assert api.last_meta["history"] == "/v1/fights/83379/odds/history"
+    e = api.event_odds("ufc-322-2025-11-15")
+    assert s.calls[1][1].endswith("/v1/events/ufc-322-2025-11-15/odds")
+    assert e["fights"][0]["points"] == 0
+    f = api.fight(83379, include=["odds"])
+    assert s.calls[2][1].endswith("/v1/fights/83379")
+    assert s.calls[2][2] == {"include": "odds"}
+    assert f["odds"]["favourite"] == "b"
+    api.event("ufc-2025-11-15", include=["eta", "odds"])
+    assert s.calls[3][2] == {"include": "eta,odds"}
+
+
+def test_fight_without_include_sends_no_params():
+    s = _Session([_Resp(200, {"data": {"id": 83379}})])
+    FightAPI("ufcalendar_test", session=s).fight(83379)
+    assert s.calls[0][2] == {}
+
+
+def test_fight_odds_history_pages_oldest_first():
+    s = _Session([
+        _Resp(200, {"data": [{"id": 1, **_PAIR}], "meta": {"pagination": {"next_cursor": "C2", "has_more": True}}}),
+        _Resp(200, {"data": [{"id": 2, **_PAIR}], "meta": {"pagination": {"next_cursor": None, "has_more": False}}}),
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    rows = list(api.fight_odds_history(83379, from_date="2026-08-01", to_date="2026-08-31"))
+    assert [r["id"] for r in rows] == [1, 2]
+    assert s.calls[0][1].endswith("/v1/fights/83379/odds/history")
+    assert s.calls[0][2] == {"from": "2026-08-01", "to": "2026-08-31", "limit": 100}
+    assert s.calls[1][2]["cursor"] == "C2"
+
+
+def test_fight_odds_history_below_pro_raises_tier_required():
+    s = _Session([_Resp(403, {"error": {"code": "tier_required", "message": "Odds history needs a Pro plan or higher.", "request_id": "r1"}})])
+    api = FightAPI("ufcalendar_test", session=s)
+    with pytest.raises(FightAPIError) as exc:
+        list(api.fight_odds_history(83379))
+    assert exc.value.code == "tier_required"
+    assert exc.value.status == 403
