@@ -51,6 +51,11 @@ def _connect_websocket(url: str) -> Any:
     return create_connection(url, timeout=_TIMEOUT)
 
 
+def _bool_param(v: Optional[bool]) -> Optional[str]:
+    """``True`` → ``"true"`` (requests would send ``"True"``); None drops the param."""
+    return None if v is None else ("true" if v else "false")
+
+
 class FightAPI:
     """Client for the UFCalendar Fight API.
 
@@ -79,6 +84,8 @@ class FightAPI:
         self._session = session or requests.Session()
         self._timeout = timeout
         self.last_rate_limit: Dict[str, Optional[str]] = {"limit": None, "remaining": None, "reset": None}
+        #: ``meta`` of the most recent response (pagination cursor, neighbour snapshot dates …).
+        self.last_meta: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------ core
 
@@ -93,7 +100,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.5.1",
+                "User-Agent": "ufcalendar-python/0.6.0",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -104,16 +111,19 @@ class FightAPI:
             "reset": resp.headers.get("X-RateLimit-Reset"),
         }
         if resp.status_code == 204:
+            self.last_meta = None
             return {}
         try:
             body = resp.json()
         except ValueError:
             body = {}
         if resp.status_code >= 400:
+            self.last_meta = None
             err = body.get("error") if isinstance(body, dict) else None
             if isinstance(err, dict):
                 raise FightAPIError(resp.status_code, str(err.get("code", "error")), str(err.get("message", resp.text[:200])), err.get("request_id"))
             raise FightAPIError(resp.status_code, "http_error", resp.text[:200], resp.headers.get("x-request-id"))
+        self.last_meta = body.get("meta") if isinstance(body, dict) else None
         return body
 
     def get(self, path: str, **params: Any) -> Any:
@@ -156,6 +166,13 @@ class FightAPI:
     def org(self, slug: str) -> Dict[str, Any]:
         return self.get(f"orgs/{slug}")
 
+    def org_division(self, org: str, division: str) -> Dict[str, Any]:
+        """One weight class in one promotion: its rankings board (``None`` where
+        the promotion publishes none), upcoming bouts at that weight, the latest
+        results and the roster by recency. ``division`` is a slug, e.g.
+        ``"lightweight"`` or ``"womens-strawweight"``."""
+        return self.get(f"orgs/{org}/divisions/{division}")
+
     # ---------------------------------------------------------------- events
 
     def events(
@@ -166,26 +183,82 @@ class FightAPI:
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
         order: Optional[str] = None,
+        is_title_card: Optional[bool] = None,
+        is_ppv: Optional[bool] = None,
+        include: Optional[Sequence[str]] = None,
         limit: Optional[int] = None,
     ) -> Iterator[Dict[str, Any]]:
         """Schedule + results. Bare call = upcoming calendar, soonest first.
 
         ``status="completed"`` (or ``order="desc"``) browses the archive newest-first.
-        ``from_date`` / ``to_date`` are ``YYYY-MM-DD``.
+        ``from_date`` / ``to_date`` are ``YYYY-MM-DD``. ``is_title_card`` /
+        ``is_ppv`` filter the cards; ``include=["headline"]`` adds each card's
+        main event (and its result once fought).
         """
         return self._paginate(
             "events",
-            {"org": org, "status": status, "from": from_date, "to": to_date, "order": order},
+            {
+                "org": org,
+                "status": status,
+                "from": from_date,
+                "to": to_date,
+                "order": order,
+                "is_title_card": _bool_param(is_title_card),
+                "is_ppv": _bool_param(is_ppv),
+                "include": ",".join(include) if include else None,
+            },
             limit,
         )
 
-    def event(self, id_or_slug: str) -> Dict[str, Any]:
-        """One event with its full fight card, venue and broadcasts."""
-        return self.get(f"events/{id_or_slug}")
+    def event(self, id_or_slug: str, *, include: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+        """One event with its full fight card, venue and broadcasts.
+        ``include=["eta"]`` adds an estimated start time to every bout."""
+        return self.get(f"events/{id_or_slug}", include=",".join(include) if include else None)
+
+    def event_watch(self, id_or_slug: str, *, country: Optional[str] = None) -> Dict[str, Any]:
+        """Who airs one event, per country: the promotion's rights deals for the
+        event's series merged with the event's own listings. ``country`` (ISO-2)
+        narrows to that market plus worldwide."""
+        return self.get(f"events/{id_or_slug}/watch", country=country)
+
+    def event_storylines(self, id_or_slug: str) -> Dict[str, Any]:
+        """The talking points of one card as of its start: ``summary`` (title
+        fights, ranked fighters, champions, the closest bout), per-bout ``tags``
+        (title, eliminator, coin_flip, both_streaking, finishers, rematch,
+        trilogy_decider) with ranks, signed streaks and a win probability
+        (UFCalendar model, else Power Index — not betting advice), and ``card``
+        aggregates (average age, tallest, longest reach, nations, streak
+        leaders, debuts, returns, fastest career finish)."""
+        return self.get(f"events/{id_or_slug}/storylines")
+
+    def event_pickem(self, id_or_slug: str) -> Dict[str, Any]:
+        """How the UFCalendar community is picking each bout on one card:
+        ``picks_a``, ``picks_b``, ``total`` and ``pct_a`` (percentage on corner
+        a; ``None`` when nobody picked), in card order. Crowd sentiment from
+        our own pick'em game, not a market and not a forecast."""
+        return self.get(f"events/{id_or_slug}/pickem")
 
     def event_changes(self, id_or_slug: str) -> List[Dict[str, Any]]:
         """Card-change diff log (fight added/removed, opponent swapped, date moved, fighter profile merged)."""
         return self.get(f"events/{id_or_slug}/changes")
+
+    def changes(
+        self,
+        org: Optional[str] = None,
+        *,
+        since: Optional[str] = None,
+        kind: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """The card-change feed across every event, newest first (default: last 90 days).
+
+        The ``card.changed`` webhook's audit trail, for callers that poll.
+        ``since`` is ``YYYY-MM-DD`` or an ISO-8601 datetime; ``kind`` narrows
+        to one of fight-added, fight-cancelled, fight-reinstated,
+        opponent-changed, time-changed, venue-changed, fighter-merged. Each
+        row carries its ``event`` (id, slug, title, org, starts_at).
+        """
+        return self._paginate("changes", {"org": org, "since": since, "kind": kind}, limit)
 
     def event_live(self, id_or_slug: str) -> Optional[Dict[str, Any]]:
         """Latest real-time LiveState snapshot on fight night (Pro plans and up),
@@ -288,6 +361,46 @@ class FightAPI:
 
     # --------------------------------------------------------------- judges
 
+    def find_fights(
+        self,
+        org: Optional[str] = None,
+        *,
+        title_only: Optional[bool] = None,
+        method: Optional[str] = None,
+        division: Optional[str] = None,
+        fighter: Optional[str] = None,
+        winner: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        main_events_only: Optional[bool] = None,
+        order: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Completed bouts, filtered — newest first unless ``order="oldest"``.
+
+        At least one narrowing filter is required (``title_only``, ``method``
+        — ko / sub / dec / finish —, ``division``, ``fighter``, ``winner``,
+        ``from_date``, ``to_date``, ``main_events_only``). The server serves
+        25 rows a page and at most 10 pages. Each row is the bout plus its
+        ``event`` (id, slug, title, org, starts_at).
+        """
+        return self._paginate(
+            "fights/search",
+            {
+                "org": org,
+                "title_only": _bool_param(title_only),
+                "method": method,
+                "division": division,
+                "fighter": None if fighter is None else str(fighter),
+                "winner": None if winner is None else str(winner),
+                "from": from_date,
+                "to": to_date,
+                "main_events_only": _bool_param(main_events_only),
+                "order": order,
+            },
+            limit,
+        )
+
     def judges(
         self,
         q: Optional[str] = None,
@@ -311,13 +424,29 @@ class FightAPI:
         """One official's career aggregates."""
         return self.get(f"judges/{judge_id}")
 
+    def split_decisions(
+        self,
+        org: Optional[str] = None,
+        *,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Split and majority decisions, newest first, with every judge's card
+        and the dissenting judges named. Commission records only."""
+        return self._paginate(
+            "scorecards/splits", {"org": org, "from": from_date, "to": to_date}, limit
+        )
+
     def judge_scorecards(
         self, judge_id: int, *, limit: Optional[int] = None
     ) -> Iterator[Dict[str, Any]]:
         """Every card this judge has turned in, newest first.
 
         Each entry is the bout, its event, the decision type and this judge's
-        own card. For the full panel on one bout use :meth:`fight_scorecards`.
+        own card, with ``lone_dissent`` / ``split`` flags and the
+        ``colleagues``' totals. For the full round-by-round panel on one bout
+        use :meth:`fight_scorecards`.
         """
         return self._paginate(f"judges/{judge_id}/scorecards", {}, limit)
 
@@ -333,11 +462,15 @@ class FightAPI:
     ) -> Iterator[Dict[str, Any]]:
         return self._paginate("fighters", {"q": q, "org": org, "country": country}, limit)
 
-    def fighter(self, id_or_slug: str) -> Dict[str, Any]:
+    def fighter(self, id_or_slug: str, *, include: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """Bio, ``records`` (career + per-org W-L-D keyed ``pro_mma`` / ``ufc`` / …),
         ``stats`` (one per-minute panel with a ``basis`` naming the bouts it
-        covers), raw ``career_stats`` rows, Power Index and CC-licensed images."""
-        return self.get(f"fighters/{id_or_slug}")
+        covers), raw ``career_stats`` rows, Power Index, CC-licensed images,
+        ``next_fight`` and ``last_fight``. ``include=["bonuses"]`` adds the UFC
+        bonus ledger; ``include=["credentials"]`` adds grappling and wrestling
+        pedigree, gyms and coaches (every row with ``sources`` and a
+        ``confidence`` grade)."""
+        return self.get(f"fighters/{id_or_slug}", include=",".join(include) if include else None)
 
     def fighter_history(self, id_or_slug: str) -> List[Dict[str, Any]]:
         """Complete multi-promotion career timeline."""
@@ -355,6 +488,13 @@ class FightAPI:
     def fighter_power_index(self, id_or_slug: str) -> Any:
         return self.get(f"fighters/{id_or_slug}/power-index")
 
+    def compare(self, a: str, b: str) -> Dict[str, Any]:
+        """Two fighters side by side (slugs or ids): bios with age, career
+        stats, strike mix, win streaks, ``head_to_head``, ``common_opponents``,
+        the ``booked_bout`` between them, the UFCalendar model ``prediction``
+        for it (UFC; not betting advice) and ``power_index`` ratings."""
+        return self.get("compare", a=a, b=b)
+
     # -------------------------------------------------------------- rankings
 
     def rankings(self, org: str = "ufc", *, date: Optional[str] = None, board: Optional[str] = None) -> Dict[str, Any]:
@@ -369,24 +509,152 @@ class FightAPI:
         """Current champions across every launch org."""
         return self.get("champions")
 
-    def power_index(self, org: str = "ufc") -> Any:
-        return self.get(f"power-index/{org}")
+    def power_index(
+        self,
+        org: str = "ufc",
+        *,
+        view: Optional[str] = None,
+        division: Optional[str] = None,
+        days: Optional[int] = None,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """UFCalendar Power Index board. ``view="movers"`` = biggest risers over
+        ``days`` (default 365), ``view="peaks"`` = all-time peak ratings;
+        ``division`` (e.g. ``"lightweight"``) narrows any view."""
+        return self.get(f"power-index/{org}", view=view, division=division, days=days, limit=limit)
+
+    # ------------------------------------------------------------ matchmaker
+
+    def matchmaker(
+        self, org: str = "ufc", *, division: Optional[str] = None, limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """UFCalendar's matchmaker: the fights worth making in one MMA promotion,
+        scored 0-100, across the roster or for one ``division``
+        (``last_meta["divisions"]`` lists the valid ones). Not a list of
+        bookings; computed without the site's Fight DNA factor."""
+        return self.get(f"matchmaker/{org}", division=division, limit=limit)
+
+    def whos_next(self, fighter: str, *, limit: Optional[int] = None) -> Dict[str, Any]:
+        """Who one fighter (slug or id) should fight next: the best-scored
+        opponents with the Power Index win probability for each, plus the
+        bout already booked (``booked_next``)."""
+        return self.get(f"matchmaker/next/{fighter}", limit=limit)
+
+    # ---------------------------------------------------------------- stats
+
+    def leaderboard(
+        self,
+        org: str,
+        metric: str,
+        *,
+        division: Optional[str] = None,
+        country: Optional[str] = None,
+        population: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """One Record Book leaderboard for one promotion (``metric`` e.g.
+        ``"wins"``, ``"fastest_knockout"``, ``"finish_rate"``). Narrow with
+        ``division`` (slug), ``country`` (ISO-2) or ``population="active"`` —
+        not ``country`` and ``active`` together. ``last_meta["metric"]`` names
+        the unit and what ``value_secondary`` means."""
+        return self.get(
+            "stats/leaders",
+            org=org, metric=metric, division=division, country=country,
+            population=population, limit=limit,
+        )
+
+    def record_book(
+        self,
+        org: str,
+        *,
+        division: Optional[str] = None,
+        country: Optional[str] = None,
+        population: Optional[str] = None,
+        scope: Optional[str] = None,
+        top: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Every leaderboard's top rows (``top``, default 10, max 25) for one
+        promotion, grouped by category: ``[{category, boards: [{metric, rows}]}]``.
+        ``scope`` = ``career`` · ``single_fight`` · ``round`` · ``division`` · ``event``."""
+        return self.get(
+            "stats/record-book",
+            org=org, division=division, country=country, population=population,
+            scope=scope, top=top,
+        )
+
+    def year_stats(self, year: int, *, org: Optional[str] = None) -> Dict[str, Any]:
+        """One calendar year in numbers for one promotion, or every covered
+        promotion when ``org`` is omitted: events, title fights, finish methods,
+        divisions, fastest finishes, upsets, Power Index climbers, busiest
+        fighters, host countries and the most-used judges."""
+        return self.get(f"stats/years/{year}", org=org)
 
     # ----------------------------------------------------------------- misc
 
-    def predictions_upcoming(self) -> Any:
-        """Model win probabilities for upcoming UFC bouts."""
-        return self.get("predictions/upcoming")
+    def predictions_upcoming(self, *, event: Optional[str] = None) -> Any:
+        """Model win probabilities for upcoming UFC bouts; ``event`` narrows to one card."""
+        return self.get("predictions/upcoming", event=event)
 
-    def broadcast_rights(self, org: str = "ufc", *, country: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Who airs the promotion, per ISO-2 country."""
-        return self.get(f"broadcast-rights/{org}", country=country)
+    def broadcast_rights(
+        self, org: str = "ufc", *, country: Optional[str] = None, series: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Who airs the promotion, per ISO-2 country — the org-wide deals, or a
+        UFC sub-series grid with ``series="dwcs"`` / ``"rtufc"``."""
+        return self.get(f"broadcast-rights/{org}", country=country, series=series)
+
+    def venues(
+        self,
+        q: Optional[str] = None,
+        *,
+        country: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Venues that hosted a covered promotion, alphabetical. ``q`` (2+
+        characters) matches name or city; ``country`` is an ISO-2 code or an
+        English country name."""
+        return self._paginate("venues", {"q": q, "country": country}, limit)
 
     def venue(self, venue_id: int) -> Dict[str, Any]:
         return self.get(f"venues/{venue_id}")
 
+    def venue_events(
+        self,
+        venue_id: int,
+        *,
+        status: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        order: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Every covered event at one venue, newest first (``order="asc"`` reverses)."""
+        return self._paginate(
+            f"venues/{venue_id}/events",
+            {"status": status, "from": from_date, "to": to_date, "order": order},
+            limit,
+        )
+
     def search(self, q: str) -> Any:
         return self.get("search", q=q)
+
+    def articles(
+        self,
+        q: Optional[str] = None,
+        *,
+        tag: Optional[str] = None,
+        locale: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """UFCalendar's own editorial archive, newest first. ``q`` (2+
+        characters) matches title, summary or a tag; ``tag`` is exact;
+        ``locale`` is one of the 13 site languages (English fallback)."""
+        return self._paginate("articles", {"q": q, "tag": tag, "locale": locale}, limit)
+
+    def article(self, slug: str, *, locale: Optional[str] = None) -> Dict[str, Any]:
+        """One article: full Markdown ``body_md`` (client widgets removed),
+        author, tags, ``published_at``; ``served_locale`` names
+        the language delivered."""
+        return self.get(f"articles/{slug}", locale=locale)
 
     def usage(self) -> Dict[str, Any]:
         """Your key's month-to-date quota usage."""
