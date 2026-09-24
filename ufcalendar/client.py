@@ -93,7 +93,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.5.0",
+                "User-Agent": "ufcalendar-python/0.5.1",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -334,7 +334,9 @@ class FightAPI:
         return self._paginate("fighters", {"q": q, "org": org, "country": country}, limit)
 
     def fighter(self, id_or_slug: str) -> Dict[str, Any]:
-        """Bio, records, career stats, Power Index and CC-licensed images."""
+        """Bio, ``records`` (career + per-org W-L-D keyed ``pro_mma`` / ``ufc`` / …),
+        ``stats`` (one per-minute panel with a ``basis`` naming the bouts it
+        covers), raw ``career_stats`` rows, Power Index and CC-licensed images."""
         return self.get(f"fighters/{id_or_slug}")
 
     def fighter_history(self, id_or_slug: str) -> List[Dict[str, Any]]:
@@ -342,7 +344,8 @@ class FightAPI:
         return self.get(f"fighters/{id_or_slug}/history")
 
     def fighter_stats(self, id_or_slug: str) -> List[Dict[str, Any]]:
-        """Career statistics per scope (``pro-mma``, ``ufc-only`` …)."""
+        """Raw career stat rows per scope (``pro-mma``, ``ufc-only`` …). For the
+        readable split use ``fighter()["records"]`` / ``fighter()["stats"]``."""
         return self.get(f"fighters/{id_or_slug}/stats")
 
     def fighter_rankings(self, id_or_slug: str) -> List[Dict[str, Any]]:
