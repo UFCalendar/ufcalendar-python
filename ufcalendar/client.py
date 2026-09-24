@@ -103,7 +103,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.7.0",
+                "User-Agent": "ufcalendar-python/0.7.1",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -216,7 +216,7 @@ class FightAPI:
     def event(self, id_or_slug: str, *, include: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """One event with its full fight card, venue and broadcasts.
         ``include=["eta"]`` adds an estimated start time to every bout;
-        ``include=["odds"]`` adds each bout's latest UFCalendar consensus line
+        ``include=["odds"]`` adds each bout's current UFCalendar consensus line
         (``None`` when unpriced). Pass both as ``["eta", "odds"]``."""
         return self.get(f"events/{id_or_slug}", include=",".join(include) if include else None)
 
@@ -245,7 +245,7 @@ class FightAPI:
 
     def event_odds(self, id_or_slug: str) -> Dict[str, Any]:
         """The UFCalendar consensus odds for every non-cancelled bout on one
-        card, in card order: ``consensus`` (latest point), ``opening``,
+        card, in card order: ``consensus`` (latest point; the closing line once settled), ``opening``,
         ``closing`` (settled bouts), ``movement`` and ``points``. Unpriced
         bouts stay on the list with ``None`` and ``points == 0``;
         ``last_meta["priced"]`` / ``["unpriced"]`` count both. Consensus
@@ -349,13 +349,13 @@ class FightAPI:
 
     def fight(self, fight_id: int, *, include: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """One bout with its result and a compact ``event``.
-        ``include=["odds"]`` adds ``odds``: the latest consensus line (or ``None``)."""
+        ``include=["odds"]`` adds ``odds``: the current consensus line (the closing line once the bout is settled) (or ``None``)."""
         return self.get(f"fights/{fight_id}", include=",".join(include) if include else None)
 
     def fight_odds(self, fight_id: int) -> Dict[str, Any]:
         """The UFCalendar consensus line for one bout.
 
-        ``consensus`` is the latest point, ``opening`` the first we recorded,
+        ``consensus`` is the latest point (the closing line once the bout is settled), ``opening`` the first we recorded,
         ``closing`` the last point at or before the event start (settled bouts
         only), ``movement`` the opening → consensus shift in implied-probability
         points on corner a. Every point carries ``a`` / ``b`` (``american``,
