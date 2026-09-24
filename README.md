@@ -44,31 +44,18 @@ history = api.fighter_history("islam-makhachev")
 | Method | Endpoint |
 |---|---|
 | `plans()` | `GET /v1/plans` — plans, quotas, trial terms, MCP endpoint (no key required) |
-| `events(org, status, from_date, to_date, order, is_title_card, is_ppv, include=["headline"])` | `GET /v1/events` (paginated; `headline` = each card's main event and its result) |
-| `event(slug, include=["eta"])` / `event_changes(slug)` | `GET /v1/events/{slug}` / `…/changes` (`eta` = per-bout estimated start) |
-| `event_watch(slug, country)` | `GET /v1/events/{slug}/watch` — how to watch one event, per country: the rights deals for its series merged with the event's own listings |
-| `changes(org, since, kind)` | `GET /v1/changes` — the card-change feed across every event, newest first (paginated; default last 90 days) |
+| `events(org, status, from_date, to_date, order)` | `GET /v1/events` (paginated) |
+| `event(slug)` / `event_changes(slug)` | `GET /v1/events/{slug}` / `…/changes` |
 | `event_live(slug)` | `GET /v1/events/{slug}/live` — real-time LiveState on fight night (Pro plans and up); the same document streams over `wss://live.ufcalendar.com/v1?key=…` |
 | `live_stream(slug)` | the **WebSocket** itself — subscribe to `wss://live.ufcalendar.com/v1` and iterate every frame (Pro plans and up) |
 | `fight(id)` / `fight_stats(id)` / `fight_rounds(id)` | `GET /v1/fights/{id}` / `…/stats` / `…/rounds` |
-| `find_fights(org, title_only, method, division, fighter, winner, from_date, to_date, main_events_only, order)` | `GET /v1/fights/search` — completed bouts, filtered, newest first (at least one narrowing filter; 25 a page, 10 pages deep) |
 | `fight_scorecards(id)` | `GET /v1/fights/{id}/scorecards` — judges, rounds, totals, deductions |
-| `judges(q, org, min_fights)` / `judge(id)` / `judge_scorecards(id)` | `GET /v1/judges` / `…/{id}` / `…/{id}/scorecards` (`last_meta["league"]` = baseline rates; each card row flags `lone_dissent` / `split` and lists `colleagues`) |
-| `split_decisions(org, from_date, to_date)` | `GET /v1/scorecards/splits` — split and majority decisions, newest first, with every judge's card and the dissenters named (paginated) |
-| `fighters(q, org, country)` / `fighter(slug, include=["bonuses", "credentials"])` | `GET /v1/fighters` / `…/{slug}` (always carries `next_fight` / `last_fight`; `bonuses` = the UFC bonus ledger; `credentials` = grappling and wrestling pedigree, gyms and coaches, each row sourced and confidence-graded) |
+| `judges(q, org, min_fights)` / `judge(id)` / `judge_scorecards(id)` | `GET /v1/judges` / `…/{id}` / `…/{id}/scorecards` |
+| `fighters(q, org, country)` / `fighter(slug)` | `GET /v1/fighters` / `…/{slug}` |
 | `fighter_history` / `fighter_stats` / `fighter_rankings` / `fighter_power_index` | `GET /v1/fighters/{slug}/…` |
-| `rankings(org, date)` / `division_rankings(org, division)` / `champions()` | `GET /v1/rankings/…` / `/v1/champions` (entries carry `movement`, `is_new`, `country_code`; `last_meta` names the previous/next snapshot) |
-| `power_index(org, view, division, days, limit)` / `predictions_upcoming(event)` | `GET /v1/power-index/{org}` (`view`: `current` · `movers` · `peaks`) / `/v1/predictions/upcoming` |
-| `matchmaker(org, division, limit)` / `whos_next(fighter, limit)` | `GET /v1/matchmaker/{org}` / `…/next/{fighter}` — UFCalendar's matchmaker: the fights worth making (scored 0–100, per division or across the roster; not bookings), and one fighter's best next opponents with the win probability for each and the bout already booked |
-| `leaderboard(org, metric, division, country, population, limit)` / `record_book(org, division, country, population, scope, top)` | `GET /v1/stats/leaders` / `…/record-book` — the Record Book: one leaderboard (48 metrics; ties flagged, sample size on every row), or every board's top rows grouped by category |
-| `org_division(org, division)` | `GET /v1/orgs/{org}/divisions/{division}` — one weight class: rankings board, upcoming bouts, latest results, roster by recency |
-| `year_stats(year, org)` | `GET /v1/stats/years/{year}` — one calendar year in numbers for one promotion (or every covered one): methods, divisions, fastest finishes, upsets, Power Index climbers, busiest fighters, countries, judges |
-| `compare(a, b)` | `GET /v1/compare` — two fighters side by side: bios, career stats, strike mix, streaks, previous meetings, common opponents, booked bout, model prediction (UFC), Power Index |
-| `event_storylines(slug)` | `GET /v1/events/{slug}/storylines` — the talking points of one card: title fights, eliminators, closest bout, rematches, streaks, debuts, returns, ranked fighters, nations |
-| `event_pickem(slug)` | `GET /v1/events/{slug}/pickem` — how the UFCalendar community is picking each bout on one card (picks per corner, total, percentage); crowd sentiment, not a market and not a forecast |
-| `broadcast_rights(org, country, series)` / `venue(id)` / `search(q)` / `usage()` | misc (`series="dwcs"`/`"rtufc"` = a UFC sub-series grid) |
-| `venues(q, country)` / `venue_events(id, status, from_date, to_date, order)` | `GET /v1/venues` / `…/{id}/events` — venue search, and every covered event at one venue, newest first (paginated) |
-| `articles(q, tag, locale)` / `article(slug, locale)` | `GET /v1/articles` / `…/{slug}` — UFCalendar's own editorial archive, newest first, in any of the 13 site languages (paginated), and one article's full Markdown body |
+| `rankings(org, date)` / `division_rankings(org, division)` / `champions()` | `GET /v1/rankings/…` / `/v1/champions` |
+| `power_index(org)` / `predictions_upcoming()` | `GET /v1/power-index/{org}` / `/v1/predictions/upcoming` |
+| `broadcast_rights(org, country)` / `venue(id)` / `search(q)` / `usage()` | misc |
 | `create_webhook_endpoint(url, events)` … | `POST /v1/webhook-endpoints` (Pro+) |
 | `calendar_ics_url(org)` | `GET /v1/calendar/{org}.ics` |
 
