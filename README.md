@@ -48,8 +48,6 @@ history = api.fighter_history("islam-makhachev")
 | `event(slug, include=["eta", "odds"])` / `event_changes(slug)` | `GET /v1/events/{slug}` / `…/changes` (`eta` = per-bout estimated start; `odds` = each bout's latest consensus line) |
 | `event_watch(slug, country)` | `GET /v1/events/{slug}/watch` — how to watch one event, per country: the rights deals for its series merged with the event's own listings |
 | `changes(org, since, kind)` | `GET /v1/changes` — the card-change feed across every event, newest first (paginated; default last 90 days) |
-| `event_live(slug)` | `GET /v1/events/{slug}/live` — real-time LiveState on fight night (Pro plans and up); the same document streams over `wss://live.ufcalendar.com/v1?key=…` |
-| `live_stream(slug)` | the **WebSocket** itself — subscribe to `wss://live.ufcalendar.com/v1` and iterate every frame (Pro plans and up) |
 | `fight(id, include=["odds"])` / `fight_stats(id)` / `fight_rounds(id)` | `GET /v1/fights/{id}` / `…/stats` / `…/rounds` |
 | `fight_odds(id)` / `event_odds(slug)` | `GET /v1/fights/{id}/odds` / `GET /v1/events/{slug}/odds` — the UFCalendar consensus line: current, opening, closing (settled bouts), movement and `sources` (how many sportsbooks backed each point). Information only, not betting advice |
 | `fight_odds_history(id, from_date, to_date)` | `GET /v1/fights/{id}/odds/history` — every consensus point, oldest first (paginated; Pro plans and up) |
@@ -75,40 +73,6 @@ history = api.fighter_history("islam-makhachev")
 | `calendar_ics_url(org)` | `GET /v1/calendar/{org}.ics` |
 
 Full reference: https://api.ufcalendar.com/docs · OpenAPI 3.1: https://api.ufcalendar.com/openapi.json · Also on [npm (TypeScript client)](https://www.npmjs.com/package/@ufcalendar/sdk), [RapidAPI Hub](https://rapidapi.com/ceo-SP8r6F1JT/api/ufc-and-mma-fight-data-by-ufcalendar), [Postman](https://www.postman.com/ceo-5d84eedc/workspace/ufcalendar-fight-api) and the [hosted MCP server](https://github.com/UFCalendar/ufcalendar-mcp)
-
-## Live stream (UFC fight nights, Pro plans and up)
-
-The **live stream** of the MMA Fight Data API: a WebSocket that pushes the fight-night document the moment it
-changes — card order and statuses, the bout in progress (round, running clock,
-unofficial in-fight stats, per-round splits, a timestamped action timeline) and the
-last result. It is the streaming half of `event_live()`, and it is the **UFC live
-stats API** you want instead of polling.
-
-The socket ships as an optional extra so a REST-only install stays `requests`-thin:
-
-```bash
-pip install 'ufcalendar[live]'
-```
-
-```python
-from ufcalendar import FightAPI
-
-api = FightAPI()  # UFCAL_API_KEY
-
-for frame in api.live_stream("ufc-331", until_final=True):
-    # frame["type"]: "snapshot" | "update" | "fight.final" | "event.completed"
-    state = frame["data"]
-    if not state:
-        continue                      # nothing streaming yet
-    cur = state["current"] or {}
-    print(frame["type"], "R", cur.get("round"), cur.get("clock_sec"))
-```
-
-`until_final=True` stops after the first `fight.final` frame; the default runs until
-the socket ends. A dropped connection is re-subscribed once automatically.
-
-Runnable ticker: [`examples/live_ticker.py`](examples/live_ticker.py) — ~40 lines that
-print `R2 3:41 · Oliveira 41 vs Makhachev 37 sig. strikes` as the round unfolds.
 
 ## Consensus odds
 

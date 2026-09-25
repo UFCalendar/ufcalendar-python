@@ -3,7 +3,6 @@
 import json
 
 import pytest
-import requests
 
 from ufcalendar import FightAPI, FightAPIError
 

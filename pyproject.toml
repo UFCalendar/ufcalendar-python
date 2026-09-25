@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ufcalendar"
-version = "0.7.4"
+version = "0.8.0"
 description = "Python client for the UFCalendar Fight API: UFC, PFL, OKTAGON, BKFC and RIZIN events, fight cards, results, per-round stats, fighter careers and UFC rankings history since 2013."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
 authors = [{ name = "UFCalendar", email = "api@ufcalendar.com" }]
-keywords = ["ufc", "mma", "api", "mma-api", "mma-fight-data-api", "sports-data", "fight-data", "rankings", "bkfc", "pfl", "mcp", "mcp-server", "mma-mcp", "fight-api", "websocket", "live-stream", "live-mma-data", "mma-odds", "consensus-odds"]
+keywords = ["ufc", "mma", "api", "mma-api", "mma-fight-data-api", "sports-data", "fight-data", "rankings", "bkfc", "pfl", "mcp", "mcp-server", "mma-mcp", "fight-api", "mma-odds", "consensus-odds"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -21,11 +21,6 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = ["requests>=2.28"]
-
-[project.optional-dependencies]
-# The live WebSocket stream (Pro plans and up). Kept out of the base install so
-# a caller that only reads REST never pays for a socket library.
-live = ["websocket-client>=1.7"]
 
 [project.urls]
 Homepage = "https://www.ufcalendar.com/developers"
