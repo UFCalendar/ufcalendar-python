@@ -103,7 +103,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.7.1",
+                "User-Agent": "ufcalendar-python/0.7.2",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -193,7 +193,8 @@ class FightAPI:
     ) -> Iterator[Dict[str, Any]]:
         """Schedule + results. Bare call = upcoming calendar, soonest first.
 
-        ``status="completed"`` (or ``order="desc"``) browses the archive newest-first.
+        ``status="completed"`` (or ``order="desc"``) browses the archive newest-first;
+        ``status="upcoming"`` = every card not yet over (announced, scheduled or live).
         ``from_date`` / ``to_date`` are ``YYYY-MM-DD``. ``is_title_card`` /
         ``is_ppv`` filter the cards; ``include=["headline"]`` adds each card's
         main event (and its result once fought).
@@ -712,7 +713,8 @@ class FightAPI:
         return self.get(f"articles/{slug}", locale=locale)
 
     def usage(self) -> Dict[str, Any]:
-        """Your key's month-to-date quota usage."""
+        """Your key's month-to-date quota usage. On the free 1-day trial,
+        ``trial_ends_at`` is when access stops (``None`` on a paid plan)."""
         return self.get("usage")
 
     def calendar_ics_url(self, org: str = "ufc") -> str:
