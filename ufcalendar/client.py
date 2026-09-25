@@ -103,7 +103,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.7.2",
+                "User-Agent": "ufcalendar-python/0.7.3",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -561,9 +561,10 @@ class FightAPI:
     def division_rankings(self, org: str, division: str, *, date: Optional[str] = None) -> Dict[str, Any]:
         return self.get(f"rankings/{org}/{division}", date=date)
 
-    def champions(self) -> Any:
-        """Current champions across every launch org."""
-        return self.get("champions")
+    def champions(self, org: Optional[str] = None, *, division: Optional[str] = None) -> Any:
+        """Current champions across every launch org, or one ``org`` /
+        ``division`` (e.g. ``champions("ufc", division="lightweight")``)."""
+        return self.get("champions", org=org, division=division)
 
     def power_index(
         self,
