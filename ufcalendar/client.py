@@ -103,7 +103,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.7.3",
+                "User-Agent": "ufcalendar-python/0.7.4",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -293,7 +293,7 @@ class FightAPI:
     ) -> Iterator[Dict[str, Any]]:
         """Subscribe to the live WebSocket and yield every frame (Pro plans and up).
 
-        The UFC live API: connects to ``wss://live.ufcalendar.com/v1?key=…``,
+        The live MMA data stream: connects to ``wss://live.ufcalendar.com/v1?key=…``,
         sends ``{"action": "subscribe", "event": <slug>}`` and yields each
         frame as a dict — ``{"type": "snapshot" | "update" | "fight.final" |
         "event.completed", "data": <LiveState>}``. ``data`` carries the round,

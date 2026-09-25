@@ -16,4 +16,4 @@ https://www.ufcalendar.com/developers
 from .client import FightAPI, FightAPIError
 
 __all__ = ["FightAPI", "FightAPIError"]
-__version__ = "0.7.3"
+__version__ = "0.7.4"

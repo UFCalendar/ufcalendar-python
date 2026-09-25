@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ufcalendar"
-version = "0.7.3"
+version = "0.7.4"
 description = "Python client for the UFCalendar Fight API: UFC, PFL, OKTAGON, BKFC and RIZIN events, fight cards, results, per-round stats, fighter careers and UFC rankings history since 2013."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
 authors = [{ name = "UFCalendar", email = "api@ufcalendar.com" }]
-keywords = ["ufc", "mma", "api", "ufc-api", "mma-api", "sports-data", "fight-data", "rankings", "bkfc", "pfl", "mcp", "mcp-server", "ufc-mcp", "mma-mcp", "fight-api", "websocket", "live-stream", "ufc-live", "ufc-odds", "consensus-odds"]
+keywords = ["ufc", "mma", "api", "mma-api", "mma-fight-data-api", "sports-data", "fight-data", "rankings", "bkfc", "pfl", "mcp", "mcp-server", "mma-mcp", "fight-api", "websocket", "live-stream", "live-mma-data", "mma-odds", "consensus-odds"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -30,7 +30,7 @@ live = ["websocket-client>=1.7"]
 [project.urls]
 Homepage = "https://www.ufcalendar.com/developers"
 Documentation = "https://api.ufcalendar.com/docs"
-"UFC API" = "https://www.ufcalendar.com/developers/ufc-api"
+"UFC data coverage" = "https://www.ufcalendar.com/developers/ufc-api"
 "OpenAPI spec" = "https://api.ufcalendar.com/openapi.json"
 Source = "https://github.com/UFCalendar/ufcalendar-python"
 Issues = "https://github.com/UFCalendar/ufcalendar-python/issues"
