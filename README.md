@@ -1,12 +1,22 @@
-# ufcalendar — Python client for the UFCalendar Fight API
+# ufcalendar — MMA Fight Data API client for Python
 
-The [UFCalendar Fight API](https://www.ufcalendar.com/developers) is a REST API for MMA data: **UFC, PFL, OKTAGON, BKFC and RIZIN** events, full fight cards, results within minutes, per-fight and round-by-round statistics, complete fighter careers, the only **MMA data API with point-in-time UFC rankings history back to 2013**, and the only one serving **judges' scorecards** — every official, every round: UFC back to 1995, PFL to 2018, OKTAGON to 2025 and RIZIN from March 2026 — plus the **UFCalendar consensus odds line** (current, opening and closing on every plan, line movement on Pro). This package is a thin `requests` wrapper over it — one method per endpoint, cursor pagination handled for you.
+UFC, PFL, OKTAGON, BKFC and RIZIN events, fight stats, results, rankings history and judges' scorecards from one Python client.
+
+The [MMA Fight Data API by UFCalendar](https://www.ufcalendar.com/developers) (the UFCalendar Fight API) is a REST API for MMA data: **UFC, PFL, OKTAGON, BKFC and RIZIN** events, full fight cards, results within minutes, per-fight and round-by-round statistics, complete fighter careers, the only **MMA data API with point-in-time UFC rankings history back to 2013**, and the only one serving **judges' scorecards** — every official, every round: UFC back to 1995, PFL to 2018, OKTAGON to 2025 and RIZIN from March 2026 — plus the **UFCalendar consensus odds line** (current, opening and closing on every plan, line movement on Pro). This package is a thin `requests` wrapper over it — one method per endpoint, cursor pagination handled for you.
 
 ```bash
 pip install ufcalendar
 ```
 
 Get a key (free 1-day trial, 100 requests, no card) at https://www.ufcalendar.com/account/api?trial=1. Paid plans from $19/month for 30,000 requests (Pro $49 for 200,000, Business $149 for 1,000,000), hard caps, no overage.
+
+## Quickstart in 3 lines
+
+```python
+from ufcalendar import FightAPI
+api = FightAPI("ufcalendar_...")                       # free 1-day trial key, no card
+print(next(api.events(org="ufc", limit=1))["title"])   # the next UFC card
+```
 
 ## Quickstart
 
@@ -22,13 +32,13 @@ for ev in api.events(org="ufc", limit=5):
 # Full card + results of the newest completed UFC event
 latest = next(api.events(org="ufc", status="completed", limit=1))
 card = api.event(latest["slug"])
-for f in card["fights"]:
+for f in card["card"]:
     r = f.get("result")
     if r:
         print(f["fighter_a"]["name"], "vs", f["fighter_b"]["name"], "->", r["method"], f"R{r['round']} {r['time']}")
 
 # Round-by-round statistics for one bout
-rounds = api.fight_rounds(card["fights"][0]["id"])
+rounds = api.fight_rounds(card["card"][0]["id"])
 
 # UFC rankings on any date since February 2013 (rank 0 = champion)
 board = api.rankings("ufc", date="2016-11-14")
