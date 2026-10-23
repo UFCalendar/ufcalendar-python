@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ufcalendar"
-version = "0.8.1"
+version = "0.8.2"
 description = "MMA Fight Data API client for Python — UFC, PFL, OKTAGON, BKFC, RIZIN events, fight stats, results, rankings history, judges' scorecards and consensus odds."
 readme = "README.md"
 license = { text = "MIT" }
