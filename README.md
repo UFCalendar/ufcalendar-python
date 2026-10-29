@@ -8,13 +8,13 @@ The [MMA Fight Data API by UFCalendar](https://www.ufcalendar.com/developers) (t
 pip install ufcalendar
 ```
 
-Get a key (free 1-day trial, 100 requests, no card) at https://www.ufcalendar.com/account/api?trial=1. Paid plans from $19/month for 30,000 requests (Pro $49 for 200,000, Business $149 for 1,000,000), hard caps, no overage.
+Get a free key at https://www.ufcalendar.com/account/api?trial=1 — the free plan is 1,000 requests a month, no card, never expires. Paid plans from $19/month for 30,000 requests (Pro $49 for 200,000, Business $149 for 1,000,000), hard caps, no overage.
 
 ## Quickstart in 3 lines
 
 ```python
 from ufcalendar import FightAPI
-api = FightAPI("ufcalendar_...")                       # free 1-day trial key, no card
+api = FightAPI("ufcalendar_...")                       # free-plan key, no card
 print(next(api.events(org="ufc", limit=1))["title"])   # the next UFC card
 ```
 
@@ -53,7 +53,7 @@ history = api.fighter_history("islam-makhachev")
 
 | Method | Endpoint |
 |---|---|
-| `plans()` | `GET /v1/plans` — plans, quotas, trial terms, MCP endpoint (no key required) |
+| `plans()` | `GET /v1/plans` — plans (Free first), quotas, free-plan terms, MCP endpoint (no key required) |
 | `events(org, status, from_date, to_date, order, is_title_card, is_ppv, include=["headline"])` | `GET /v1/events` (paginated; `headline` = each card's main event and its result) |
 | `event(slug, include=["eta", "odds"])` / `event_changes(slug)` | `GET /v1/events/{slug}` / `…/changes` (`eta` = per-bout estimated start; `odds` = each bout's latest consensus line) |
 | `event_watch(slug, country)` | `GET /v1/events/{slug}/watch` — how to watch one event, per country: the rights deals for its series merged with the event's own listings |

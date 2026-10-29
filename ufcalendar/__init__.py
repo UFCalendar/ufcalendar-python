@@ -9,11 +9,11 @@
     board = api.rankings("ufc", date="2016-11-14")   # rankings point-in-time since 2013
     print(board["snapshot_date"], board["divisions"][0]["entries"][0])
 
-Docs: https://api.ufcalendar.com/docs · pricing + free 1-day trial:
+Docs: https://api.ufcalendar.com/docs · pricing + the free plan:
 https://www.ufcalendar.com/developers
 """
 
 from .client import FightAPI, FightAPIError
 
 __all__ = ["FightAPI", "FightAPIError"]
-__version__ = "0.8.2"
+__version__ = "0.8.3"

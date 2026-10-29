@@ -62,7 +62,7 @@ class FightAPI:
         if not key:
             raise ValueError(
                 "No API key. Pass api_key=... or set UFCAL_API_KEY. "
-                "Keys (and the free 1-day trial) live at https://www.ufcalendar.com/account/api"
+                "Keys (free plan: 1,000 requests/month, no card) live at https://www.ufcalendar.com/account/api"
             )
         self.api_key = key
         self.base_url = base_url.rstrip("/")
@@ -85,7 +85,7 @@ class FightAPI:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.8.2",
+                "User-Agent": "ufcalendar-python/0.8.3",
             },
             timeout=self._timeout,
             allow_redirects=True,
@@ -134,7 +134,7 @@ class FightAPI:
     # ----------------------------------------------------------------- plans
 
     def plans(self) -> Dict[str, Any]:
-        """Plans, quotas, the free 1-day trial rule, the MCP endpoint and the doc links.
+        """Plans (Free first), quotas, the free-plan rule, the MCP endpoint and the doc links.
 
         The only endpoint that answers without a credential (the client still
         sends its key header — harmless). Useful for showing a caller what a
@@ -624,8 +624,8 @@ class FightAPI:
         return self.get(f"articles/{slug}", locale=locale)
 
     def usage(self) -> Dict[str, Any]:
-        """Your key's month-to-date quota usage. On the free 1-day trial,
-        ``trial_ends_at`` is when access stops (``None`` on a paid plan)."""
+        """Your key's month-to-date quota usage. On an owner-granted trial,
+        ``trial_ends_at`` is when it ends (``None`` otherwise)."""
         return self.get("usage")
 
     def calendar_ics_url(self, org: str = "ufc") -> str:
