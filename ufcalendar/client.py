@@ -17,12 +17,23 @@ receive must be displayed as a credit.
 from __future__ import annotations
 
 import os
+import random
+import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, Iterator, List, Optional, Sequence
 
 import requests
 
 DEFAULT_BASE_URL = "https://api.ufcalendar.com/v1"
 _TIMEOUT = 30
+#: Default number of times a GET that hit the per-minute limit is retried.
+DEFAULT_MAX_RETRIES = 3
+#: A 429 whose ``Retry-After`` is longer than this is not waited out: the
+#: per-minute limit always resets within a minute, anything longer is the
+#: monthly quota (or something we do not understand) and must surface.
+MAX_RETRY_AFTER_SECONDS = 60.0
+_RETRY_JITTER_SECONDS = 0.5
 
 
 class FightAPIError(Exception):
@@ -41,6 +52,45 @@ def _bool_param(v: Optional[bool]) -> Optional[str]:
     return None if v is None else ("true" if v else "false")
 
 
+def _retry_after_seconds(value: Optional[str]) -> Optional[float]:
+    """``Retry-After`` as seconds: delta-seconds or an HTTP date; None if absent/unparseable."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    try:
+        secs = float(value)
+    except ValueError:
+        try:
+            when = parsedate_to_datetime(value)
+        except (TypeError, ValueError, IndexError):
+            return None
+        if when is None:
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        secs = (when - datetime.now(timezone.utc)).total_seconds()
+    if secs != secs:  # NaN
+        return None
+    return max(0.0, secs)
+
+
+def _short_rate_limit_wait(resp: Any, body: Any) -> Optional[float]:
+    """Seconds to wait before retrying a 429, or None when it must not be retried.
+
+    Only the per-minute limit (``rate_limited``) is waited out. The monthly
+    quota (``quota_exceeded``) raises at once — near the end of a month its
+    ``Retry-After`` can be short, so the code is checked, not just the header.
+    """
+    err = body.get("error") if isinstance(body, dict) else None
+    code = err.get("code") if isinstance(err, dict) else None
+    if code == "quota_exceeded":
+        return None
+    secs = _retry_after_seconds(resp.headers.get("Retry-After") or resp.headers.get("retry-after"))
+    if secs is None or secs > MAX_RETRY_AFTER_SECONDS:
+        return None
+    return secs
+
+
 class FightAPI:
     """Client for the UFCalendar Fight API.
 
@@ -48,6 +98,11 @@ class FightAPI:
         Falls back to the ``UFCAL_API_KEY`` environment variable.
     :param base_url: override for testing; defaults to the production ``/v1``.
     :param session: optional :class:`requests.Session` to reuse connections.
+    :param max_retries: how many times a GET that hit the per-minute limit
+        (429 ``rate_limited`` with ``Retry-After`` ≤ 60 s) is retried after
+        sleeping ``Retry-After`` plus a little jitter. Default 3; ``0`` disables.
+        The monthly quota (``quota_exceeded``) and non-GET requests always raise
+        at once.
     """
 
     def __init__(
@@ -57,6 +112,7 @@ class FightAPI:
         base_url: str = DEFAULT_BASE_URL,
         session: Optional[requests.Session] = None,
         timeout: float = _TIMEOUT,
+        max_retries: int = DEFAULT_MAX_RETRIES,
     ):
         key = api_key or os.environ.get("UFCAL_API_KEY")
         if not key:
@@ -68,6 +124,9 @@ class FightAPI:
         self.base_url = base_url.rstrip("/")
         self._session = session or requests.Session()
         self._timeout = timeout
+        if max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
+        self.max_retries = int(max_retries)
         self.last_rate_limit: Dict[str, Optional[str]] = {"limit": None, "remaining": None, "reset": None}
         #: ``meta`` of the most recent response (pagination cursor, neighbour snapshot dates …).
         self.last_meta: Optional[Dict[str, Any]] = None
@@ -77,31 +136,42 @@ class FightAPI:
     def _request(self, method: str, path: str, params: Optional[Dict[str, Any]] = None, json: Any = None) -> Dict[str, Any]:
         url = f"{self.base_url}/{path.lstrip('/')}"
         clean = {k: v for k, v in (params or {}).items() if v is not None}
-        resp = self._session.request(
-            method,
-            url,
-            params=clean,
-            json=json,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Accept": "application/json",
-                "User-Agent": "ufcalendar-python/0.8.3",
-            },
-            timeout=self._timeout,
-            allow_redirects=True,
-        )
-        self.last_rate_limit = {
-            "limit": resp.headers.get("X-RateLimit-Limit"),
-            "remaining": resp.headers.get("X-RateLimit-Remaining"),
-            "reset": resp.headers.get("X-RateLimit-Reset"),
-        }
-        if resp.status_code == 204:
-            self.last_meta = None
-            return {}
-        try:
-            body = resp.json()
-        except ValueError:
-            body = {}
+        attempt = 0
+        while True:
+            resp = self._session.request(
+                method,
+                url,
+                params=clean,
+                json=json,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Accept": "application/json",
+                    "User-Agent": "ufcalendar-python/0.8.4",
+                },
+                timeout=self._timeout,
+                allow_redirects=True,
+            )
+            self.last_rate_limit = {
+                "limit": resp.headers.get("X-RateLimit-Limit"),
+                "remaining": resp.headers.get("X-RateLimit-Remaining"),
+                "reset": resp.headers.get("X-RateLimit-Reset"),
+            }
+            if resp.status_code == 204:
+                self.last_meta = None
+                return {}
+            try:
+                body = resp.json()
+            except ValueError:
+                body = {}
+            # Wait out the per-minute limit on reads (a 429'd request is not
+            # counted against the month). Writes are never replayed.
+            if resp.status_code == 429 and method.upper() == "GET" and attempt < self.max_retries:
+                wait = _short_rate_limit_wait(resp, body)
+                if wait is not None:
+                    attempt += 1
+                    time.sleep(wait + random.uniform(0, _RETRY_JITTER_SECONDS))
+                    continue
+            break
         if resp.status_code >= 400:
             self.last_meta = None
             err = body.get("error") if isinstance(body, dict) else None

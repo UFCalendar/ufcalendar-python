@@ -455,3 +455,89 @@ def test_fight_odds_history_below_pro_raises_tier_required():
         list(api.fight_odds_history(83379))
     assert exc.value.code == "tier_required"
     assert exc.value.status == 403
+
+
+# ------------------------------------------------------------ 429 retries
+
+def _rate_limited(retry_after="7"):
+    headers = {"Retry-After": retry_after} if retry_after is not None else {}
+    return _Resp(429, {"error": {"code": "rate_limited", "message": "Per-minute limit of 10", "request_id": "req_rl"}}, headers)
+
+
+@pytest.fixture
+def sleeps(monkeypatch):
+    waits = []
+    monkeypatch.setattr("ufcalendar.client.time.sleep", waits.append)
+    monkeypatch.setattr("ufcalendar.client.random.uniform", lambda a, b: 0.25)
+    return waits
+
+
+def test_get_waits_out_a_per_minute_429_and_retries(sleeps):
+    s = _Session([_rate_limited("7"), _Resp(200, {"data": [{"slug": "ufc"}]})])
+    api = FightAPI("ufcalendar_test", session=s)
+    assert api.orgs() == [{"slug": "ufc"}]
+    assert len(s.calls) == 2
+    assert sleeps == [7.25]  # Retry-After + jitter
+
+
+def test_paginated_get_retries_mid_walk(sleeps):
+    s = _Session([
+        _Resp(200, {"data": [{"slug": "a"}], "meta": {"pagination": {"next_cursor": "c2"}}}),
+        _rate_limited("3"),
+        _Resp(200, {"data": [{"slug": "b"}], "meta": {"pagination": {"next_cursor": None}}}),
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    assert [r["slug"] for r in api.events(org="ufc")] == ["a", "b"]
+    assert s.calls[2][2]["cursor"] == "c2"
+    assert sleeps == [3.25]
+
+
+def test_retries_are_bounded_then_raise(sleeps):
+    s = _Session([_rate_limited("1") for _ in range(4)])
+    api = FightAPI("ufcalendar_test", session=s)
+    with pytest.raises(FightAPIError) as ei:
+        api.orgs()
+    assert ei.value.status == 429 and ei.value.code == "rate_limited"
+    assert len(s.calls) == 4  # 1 + 3 retries
+    assert len(sleeps) == 3
+
+
+def test_max_retries_zero_disables(sleeps):
+    s = _Session([_rate_limited("1")])
+    api = FightAPI("ufcalendar_test", session=s, max_retries=0)
+    with pytest.raises(FightAPIError):
+        api.orgs()
+    assert len(s.calls) == 1 and sleeps == []
+
+
+def test_negative_max_retries_rejected():
+    with pytest.raises(ValueError):
+        FightAPI("ufcalendar_test", max_retries=-1)
+
+
+def test_monthly_quota_raises_at_once_even_with_short_retry_after(sleeps):
+    # Seconds before the month rolls over the quota's Retry-After is short —
+    # the problem code, not the header, is what says "do not wait".
+    s = _Session([_Resp(429, {"error": {"code": "quota_exceeded", "message": "Monthly quota", "request_id": "r"}}, {"Retry-After": "20"})])
+    api = FightAPI("ufcalendar_test", session=s)
+    with pytest.raises(FightAPIError) as ei:
+        api.orgs()
+    assert ei.value.code == "quota_exceeded"
+    assert len(s.calls) == 1 and sleeps == []
+
+
+@pytest.mark.parametrize("retry_after", [None, "3600", "soon"])
+def test_long_absent_or_garbled_retry_after_raises_at_once(sleeps, retry_after):
+    s = _Session([_rate_limited(retry_after)])
+    api = FightAPI("ufcalendar_test", session=s)
+    with pytest.raises(FightAPIError):
+        api.orgs()
+    assert len(s.calls) == 1 and sleeps == []
+
+
+def test_post_is_never_retried(sleeps):
+    s = _Session([_rate_limited("2")])
+    api = FightAPI("ufcalendar_test", session=s)
+    with pytest.raises(FightAPIError):
+        api.create_webhook_endpoint("https://example.com/h", ["fight.result"])
+    assert len(s.calls) == 1 and sleeps == []

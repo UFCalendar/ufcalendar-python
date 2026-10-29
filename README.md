@@ -113,6 +113,20 @@ slow drift arrives once. Information only, not betting advice.
 
 Every error raises `FightAPIError` with `.status`, `.code`, `.message`, `.request_id`. After each call `api.last_rate_limit` holds the `X-RateLimit-*` headers.
 
+Rate-limited reads are waited out for you. When a `GET` hits the per-minute limit (429
+`rate_limited`, `Retry-After` of 60 s or less; the free plan allows 10 requests a minute) the
+client sleeps for `Retry-After` plus a little jitter and tries again, up to `max_retries` times
+(default 3), so a script that walks a few pages does not die mid-run. A 429'd request does not
+count against your month.
+
+```python
+api = FightAPI("ufcalendar_...", max_retries=5)   # wait out more per-minute 429s
+api = FightAPI("ufcalendar_...", max_retries=0)   # never wait: raise FightAPIError on the first 429
+```
+
+The monthly quota (429 `quota_exceeded`), a 429 with a long or missing `Retry-After`, and every
+non-`GET` request (webhook endpoint create / delete / rotate) raise `FightAPIError` at once.
+
 ## Notes
 
 - Odds are the UFCalendar consensus line only (no book identities). Information only, not betting advice.
