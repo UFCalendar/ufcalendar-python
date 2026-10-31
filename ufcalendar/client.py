@@ -146,7 +146,7 @@ class FightAPI:
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Accept": "application/json",
-                    "User-Agent": "ufcalendar-python/0.8.4",
+                    "User-Agent": "ufcalendar-python/0.9.0",
                 },
                 timeout=self._timeout,
                 allow_redirects=True,
@@ -369,7 +369,16 @@ class FightAPI:
         )
 
     def fight_stats(self, fight_id: int) -> List[Dict[str, Any]]:
-        """Per-fight totals for both corners."""
+        """Per-fight totals for both corners, each with its UFCalendar fantasy points.
+
+        Every line carries ``fantasy``: ``points``, a per-category
+        ``breakdown`` (strikes, sig_strikes, control, takedowns, reversals,
+        knockdowns, win_bonus, quick_win_bonus) and ``complete`` (false when a
+        stat is missing or the bout is not settled — the points are then a
+        floor). The data-quality flags (``has_totals``, ``has_rounds``,
+        ``has_position_data``, ``rounds_sum_matches_totals``) ride in
+        ``client.last_meta["quality"]`` after the call.
+        """
         return self.get(f"fights/{fight_id}/stats")
 
     def fight_rounds(self, fight_id: int) -> List[Dict[str, Any]]:
@@ -482,6 +491,41 @@ class FightAPI:
         use :meth:`fight_scorecards`.
         """
         return self._paginate(f"judges/{judge_id}/scorecards", {}, limit)
+
+    # -------------------------------------------------------------- referees
+
+    def referees(
+        self,
+        q: Optional[str] = None,
+        *,
+        org: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Every referee who has worked a settled launch-org bout, busiest first.
+
+        Each row: ``slug`` (a slug of the name — spelling variants fold
+        together), ``bouts``, ``by_org``, first and last bout, ``finish_rate``,
+        ``methods`` (ko_tko / submission / decision / other) and
+        ``avg_fight_time_sec``. ``q`` is accent- and spacing-insensitive.
+        """
+        return self._paginate("referees", {"q": q, "org": org}, limit)
+
+    def referee(self, slug: str) -> Dict[str, Any]:
+        """One referee's career aggregates, e.g. ``referee("herb-dean")``."""
+        return self.get(f"referees/{slug}")
+
+    def referee_fights(self, slug: str, *, limit: Optional[int] = None) -> Iterator[Dict[str, Any]]:
+        """Every settled bout one referee worked, newest first (the bout plus its ``event``)."""
+        return self._paginate(f"referees/{slug}/fights", {}, limit)
+
+    # -------------------------------------------------------------- coverage
+
+    def coverage(self, org: Optional[str] = None) -> List[Dict[str, Any]]:
+        """What the database holds per launch org per year: events, settled bouts
+        and how many carry stats, round stats, commission scorecards and a
+        consensus odds line (counts plus 0-1 ``*_rate``), with ``totals`` and
+        ``last_result_at``. Computed from the data, refreshed every 30 minutes."""
+        return self.get("coverage", org=org)
 
     # -------------------------------------------------------------- fighters
 

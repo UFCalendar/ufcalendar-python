@@ -58,13 +58,15 @@ history = api.fighter_history("islam-makhachev")
 | `event(slug, include=["eta", "odds"])` / `event_changes(slug)` | `GET /v1/events/{slug}` / `…/changes` (`eta` = per-bout estimated start; `odds` = each bout's latest consensus line) |
 | `event_watch(slug, country)` | `GET /v1/events/{slug}/watch` — how to watch one event, per country: the rights deals for its series merged with the event's own listings |
 | `changes(org, since, kind)` | `GET /v1/changes` — the card-change feed across every event, newest first (paginated; default last 90 days) |
-| `fight(id, include=["odds"])` / `fight_stats(id)` / `fight_rounds(id)` | `GET /v1/fights/{id}` / `…/stats` / `…/rounds` |
+| `fight(id, include=["odds"])` / `fight_stats(id)` / `fight_rounds(id)` | `GET /v1/fights/{id}` / `…/stats` / `…/rounds` (`fight_stats` lines carry `fantasy` — UFCalendar fantasy points with a per-category breakdown; `last_meta["quality"]` = data-quality flags) |
 | `fight_odds(id)` / `event_odds(slug)` | `GET /v1/fights/{id}/odds` / `GET /v1/events/{slug}/odds` — the UFCalendar consensus line: current, opening, closing (settled bouts), movement and `sources` (how many sportsbooks backed each point), plus `props` (method of victory per corner, total rounds over/under, goes the distance). Information only, not betting advice |
 | `fight_odds_history(id, from_date, to_date)` | `GET /v1/fights/{id}/odds/history` — every consensus point, oldest first (paginated; Pro plans and up) |
 | `find_fights(org, title_only, method, division, fighter, winner, from_date, to_date, main_events_only, order)` | `GET /v1/fights/search` — completed bouts, filtered, newest first (at least one narrowing filter; 25 a page, 10 pages deep) |
 | `fight_scorecards(id)` | `GET /v1/fights/{id}/scorecards` — judges, rounds, totals, deductions |
 | `judges(q, org, min_fights)` / `judge(id)` / `judge_scorecards(id)` | `GET /v1/judges` / `…/{id}` / `…/{id}/scorecards` (`last_meta["league"]` = baseline rates; each card row flags `lone_dissent` / `split` and lists `colleagues`) |
 | `split_decisions(org, from_date, to_date)` | `GET /v1/scorecards/splits` — split and majority decisions, newest first, with every judge's card and the dissenters named (paginated) |
+| `referees(q, org)` / `referee(slug)` / `referee_fights(slug)` | `GET /v1/referees` / `…/{slug}` / `…/{slug}/fights` — referees across the launch promotions: bouts, finish rate, method mix, average fight time; the bouts each one worked (paginated) |
+| `coverage(org)` | `GET /v1/coverage` — what the database holds per promotion per year: events, settled bouts, and the share with stats, round stats, commission scorecards and a consensus odds line |
 | `fighters(q, org, country)` / `fighter(slug, include=["bonuses", "credentials"])` | `GET /v1/fighters` / `…/{slug}` (always carries `next_fight` / `last_fight`; `bonuses` = the UFC bonus ledger; `credentials` = grappling and wrestling pedigree, gyms and coaches, each row sourced and confidence-graded) |
 | `fighter_history` / `fighter_stats` / `fighter_rankings` / `fighter_power_index` | `GET /v1/fighters/{slug}/…` |
 | `rankings(org, date)` / `division_rankings(org, division)` / `champions()` | `GET /v1/rankings/…` / `/v1/champions` (entries carry `movement`, `is_new`, `country_code`; `last_meta` names the previous/next snapshot) |

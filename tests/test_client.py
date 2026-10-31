@@ -139,6 +139,39 @@ def test_judge_scorecards_path():
     assert rows[0]["card"]["judge_id"] == 36
 
 
+def test_referees_paginate_and_referee_paths():
+    s = _Session([
+        _Resp(200, {"data": [{"slug": "herb-dean", "bouts": 1383}],
+                    "meta": {"pagination": {"next_cursor": None}}}),
+        _Resp(200, {"data": {"slug": "herb-dean"}, "meta": {}}),
+        _Resp(200, {"data": [{"id": 93271}], "meta": {"pagination": {"next_cursor": None}}}),
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    rows = list(api.referees(org="ufc"))
+    assert rows[0]["slug"] == "herb-dean"
+    assert s.calls[0][1].endswith("/v1/referees")
+    assert s.calls[0][2] == {"org": "ufc", "limit": 100}
+    assert api.referee("herb-dean")["slug"] == "herb-dean"
+    assert s.calls[1][1].endswith("/v1/referees/herb-dean")
+    assert [r["id"] for r in api.referee_fights("herb-dean")] == [93271]
+    assert s.calls[2][1].endswith("/v1/referees/herb-dean/fights")
+
+
+def test_coverage_and_fight_stats_quality_meta():
+    s = _Session([
+        _Resp(200, {"data": [{"org": "bkfc", "years": []}], "meta": {"org": "bkfc"}}),
+        _Resp(200, {"data": [{"corner": "a", "fantasy": {"points": 106.93}}],
+                    "meta": {"fight_id": 60381, "quality": {"rounds_sum_matches_totals": True}}}),
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    assert api.coverage("bkfc")[0]["org"] == "bkfc"
+    assert s.calls[0][1].endswith("/v1/coverage")
+    assert s.calls[0][2] == {"org": "bkfc"}
+    lines = api.fight_stats(60381)
+    assert lines[0]["fantasy"]["points"] == 106.93
+    assert api.last_meta["quality"]["rounds_sum_matches_totals"] is True
+
+
 def test_fighter_include_is_a_comma_list():
     s = _Session([_Resp(200, {"data": {"id": 2215, "next_fight": None,
                                        "bonuses": {"org": "ufc", "total": 6}}})])
