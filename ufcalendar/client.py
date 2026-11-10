@@ -118,7 +118,7 @@ class FightAPI:
         if not key:
             raise ValueError(
                 "No API key. Pass api_key=... or set UFCAL_API_KEY. "
-                "Keys (free plan: 1,000 requests/month, no card) live at https://www.ufcalendar.com/account/api"
+                "Keys (free plan: 100 requests/month, no card) live at https://www.ufcalendar.com/account/api"
             )
         self.api_key = key
         self.base_url = base_url.rstrip("/")
@@ -146,7 +146,7 @@ class FightAPI:
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Accept": "application/json",
-                    "User-Agent": "ufcalendar-python/0.9.0",
+                    "User-Agent": "ufcalendar-python/0.9.1",
                 },
                 timeout=self._timeout,
                 allow_redirects=True,
