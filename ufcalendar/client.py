@@ -146,7 +146,7 @@ class FightAPI:
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Accept": "application/json",
-                    "User-Agent": "ufcalendar-python/0.9.1",
+                    "User-Agent": "ufcalendar-python/0.10.0",
                 },
                 timeout=self._timeout,
                 allow_redirects=True,
@@ -401,6 +401,65 @@ class FightAPI:
         """
         return self.get(f"fights/{fight_id}/scorecards")
 
+    def fight_timeline(self, fight_id: int) -> Dict[str, Any]:
+        """The official in-fight log of one settled UFC bout (Pro plans and up).
+
+        ``actions`` is every logged action in order — ``type`` (the log's own
+        vocabulary: ``round_start``, ``takedown``, ``takedown_attempt``,
+        ``knockdown``, ``submission_attempt``, ``reversal``, ``round_pause``,
+        ``pause_reason_eye_poke`` …), ``round``, ``elapsed_sec`` (seconds
+        elapsed in the round), ``at``, ``fighter_id`` and ``corner``.
+        ``stoppages`` pairs each referee stoppage with its ``reason``
+        (``eye_poke``, ``low_blow``, ``doctor``, ``generic`` or ``None``) and
+        its real ``duration_sec``.
+
+        Fouls are confirmed fouls. The log labels only two, the eye poke and
+        the low blow; any other foul (an illegal knee to a grounded opponent,
+        an upkick, a headbutt, a bite, a fence grab) reaches it as a
+        ``generic`` stoppage naming nobody, so a foul is reported only when a
+        record confirms it (``foul_basis`` / ``basis``): ``log`` (the
+        labelled row), ``deduction`` (the athletic commission took a point)
+        or ``result`` (the bout ended on it: a disqualification or a "could
+        not continue"). On a stoppage, ``is_foul`` says whether a foul is
+        confirmed, ``foul`` what it was (``eye_poke``, ``low_blow``,
+        ``illegal_knee``, ``illegal_kick``, ``headbutt``, ``illegal_strike``,
+        ``fence``, ``biting``, ``other``), ``committed_by`` who committed it
+        (``None`` when no record names a fighter), ``points_deducted`` and
+        ``ended_bout``; a ``generic`` stoppage with no record behind it has
+        ``is_foul`` false. ``incidents`` lists every confirmed foul in fight
+        order, including one with no stoppage in the log. ``fouls["a"]`` /
+        ``fouls["b"]`` count what each corner committed (``eye_pokes``,
+        ``low_blows``, ``other``, ``total``, ``points_deducted``,
+        ``stoppage_sec``). A recorded foul is not a ruling on intent.
+
+        Coverage: UFC bouts (Contender Series included) from June 2013;
+        stoppage reasons from 8 December 2018 — before that ``reason`` is
+        ``None`` and ``last_meta["has_stoppage_reasons"]`` is false. A bout
+        with no log, or one not settled yet, returns empty lists and
+        ``last_meta["note"]``. Below Pro the API answers 403
+        ``tier_required`` (raised as :class:`FightAPIError`).
+        """
+        return self.get(f"fights/{fight_id}/timeline")
+
+    def fight_positions(self, fight_id: int) -> Dict[str, Any]:
+        """Position stats of one settled UFC bout (Pro plans and up).
+
+        ``totals`` holds one line per fighter for the whole bout and
+        ``rounds`` the same lines per round. Each line: ``time``
+        (``standing_sec``, ``distance_sec``, ``clinch_sec``, ``ground_sec``,
+        ``neutral_sec`` — shared by both fighters; standing = distance +
+        clinch), ``control`` (this fighter's control time: ``total_sec``,
+        ``clinch_sec``, ``ground_sec`` and the ground split ``back_sec``,
+        ``mount_sec``, ``side_sec``, ``half_guard_sec``, ``guard_sec``,
+        ``misc_ground_sec``), ``sig_strikes`` (position → target →
+        ``landed`` / ``attempted``) and ``total_strikes``. ``None`` means not
+        tracked for that bout; ``0`` is a real zero. Tracked reliably from
+        2007. ``last_meta["official"]`` is true once every line is the
+        official post-fight figure. Below Pro the API answers 403
+        ``tier_required`` (raised as :class:`FightAPIError`).
+        """
+        return self.get(f"fights/{fight_id}/positions")
+
     # --------------------------------------------------------------- judges
 
     def find_fights(
@@ -567,6 +626,44 @@ class FightAPI:
 
     def fighter_power_index(self, id_or_slug: str) -> Any:
         return self.get(f"fighters/{id_or_slug}/power-index")
+
+    def fighter_discipline(self, id_or_slug: str) -> Optional[Dict[str, Any]]:
+        """The confirmed fouls in a fighter's UFC bouts (Pro plans and up).
+
+        Since 8 December 2018: eye pokes and low blows from the official
+        in-fight log, plus any other foul (an illegal knee to a grounded
+        opponent, an upkick, a headbutt, a bite, a fence grab) confirmed by
+        the athletic commission's point deduction or by the official result.
+        ``committed`` and ``drawn`` (``total``, ``eye_pokes``, ``low_blows``,
+        ``other``), ``points_deducted``, ``stoppage_sec``, ``fouls_per_15``
+        (``None`` under 5 tracked bouts or 30 minutes), ``tracked_fights``,
+        ``cage_seconds`` and ``incidents`` — every confirmed foul, most
+        recent first, with the event, opponent, ``role`` (``committed`` /
+        ``drawn``), ``reason`` (the foul: ``eye_poke``, ``low_blow``,
+        ``illegal_knee``, ``illegal_kick``, ``headbutt``, ``illegal_strike``,
+        ``fence``, ``biting``, ``other``), ``basis`` (``log``, ``deduction``
+        or ``result``), ``round``, ``elapsed_sec``, ``stoppage_sec``,
+        ``points_deducted`` and ``ended_bout``. A ``generic`` stoppage with
+        no record behind it is never counted. A recorded foul is not a ruling
+        on intent. Returns ``None`` (with ``last_meta["note"]``) for a
+        fighter with fewer than 3 tracked bouts and no recorded foul. Below
+        Pro the API answers 403 ``tier_required``
+        (raised as :class:`FightAPIError`).
+        """
+        return self.get(f"fighters/{id_or_slug}/discipline")
+
+    def fighter_positions(self, id_or_slug: str) -> Optional[Dict[str, Any]]:
+        """A fighter's career position profile (Pro plans and up).
+
+        ``time`` — seconds at distance, in the clinch and on the ground with
+        their 0–1 shares of ``cage_seconds`` — and ``control``: ``for_sec`` /
+        ``against_sec`` plus ``by_position`` (``back``, ``mount``, ``side``,
+        ``half_guard``, ``guard``, ``clinch``), over the fighter's settled
+        bouts with tracked positions (``tracked_fights``). Returns ``None``
+        (with ``last_meta["note"]``) under 3 such bouts. Below Pro the API
+        answers 403 ``tier_required`` (raised as :class:`FightAPIError`).
+        """
+        return self.get(f"fighters/{id_or_slug}/positions")
 
     def compare(self, a: str, b: str) -> Dict[str, Any]:
         """Two fighters side by side (slugs or ids): bios with age, career

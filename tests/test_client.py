@@ -574,3 +574,127 @@ def test_post_is_never_retried(sleeps):
     with pytest.raises(FightAPIError):
         api.create_webhook_endpoint("https://example.com/h", ["fight.result"])
     assert len(s.calls) == 1 and sleeps == []
+
+
+def test_fight_timeline_and_positions_request_shapes():
+    """The in-fight log and position stats: plain GETs, meta kept on last_meta."""
+    timeline = {
+        "round_seconds": 300,
+        "actions": [],
+        # The real stoppages of fight 59652 (UFC 286): a ``generic`` pause that
+        # is no foul, a logged low blow, and a ``generic`` pause the
+        # commission's point deduction confirms as a fence grab.
+        "stoppages": [
+            {"round": 1, "elapsed_sec": 246, "at": "2023-03-18T23:35:58.000Z", "resumed_at": "2023-03-18T23:36:11.000Z",
+             "duration_sec": 13, "reason": "generic", "is_foul": False, "foul": None, "foul_basis": None,
+             "committed_by": None, "points_deducted": 0, "ended_bout": False},
+            {"round": 2, "elapsed_sec": 54, "at": "2023-03-18T23:39:06.000Z", "resumed_at": "2023-03-18T23:39:19.000Z",
+             "duration_sec": 13, "reason": "low_blow", "is_foul": True, "foul": "low_blow", "foul_basis": "log",
+             "committed_by": {"fighter_id": 401, "corner": "a"}, "points_deducted": 0, "ended_bout": False},
+            {"round": 3, "elapsed_sec": 90, "at": "2023-03-18T23:46:06.000Z", "resumed_at": "2023-03-18T23:46:54.000Z",
+             "duration_sec": 48, "reason": "generic", "is_foul": True, "foul": "fence", "foul_basis": "deduction",
+             "committed_by": {"fighter_id": 401, "corner": "a"}, "points_deducted": 1, "ended_bout": False},
+            {"round": 3, "elapsed_sec": 175, "at": "2023-03-18T23:48:19.000Z", "resumed_at": "2023-03-18T23:48:42.000Z",
+             "duration_sec": 23, "reason": "low_blow", "is_foul": True, "foul": "low_blow", "foul_basis": "log",
+             "committed_by": {"fighter_id": 401, "corner": "a"}, "points_deducted": 0, "ended_bout": False},
+        ],
+        "incidents": [
+            {"foul": "low_blow", "basis": "log", "committed_by": {"fighter_id": 401, "corner": "a"}, "round": 2,
+             "elapsed_sec": 54, "stoppage_sec": 13, "points_deducted": 0, "ended_bout": False},
+            {"foul": "fence", "basis": "deduction", "committed_by": {"fighter_id": 401, "corner": "a"}, "round": 3,
+             "elapsed_sec": 90, "stoppage_sec": 48, "points_deducted": 1, "ended_bout": False},
+            {"foul": "low_blow", "basis": "log", "committed_by": {"fighter_id": 401, "corner": "a"}, "round": 3,
+             "elapsed_sec": 175, "stoppage_sec": 23, "points_deducted": 0, "ended_bout": False},
+        ],
+        "fouls": {
+            "a": {"fighter_id": 401, "eye_pokes": 0, "low_blows": 2, "other": 1, "total": 3,
+                  "points_deducted": 1, "stoppage_sec": 84},
+            "b": {"fighter_id": 1204, "eye_pokes": 0, "low_blows": 0, "other": 0, "total": 0,
+                  "points_deducted": 0, "stoppage_sec": 0},
+        },
+    }
+    s = _Session([
+        _Resp(200, {"data": timeline, "meta": {"fight_id": 59652, "source": "ufc-official", "has_stoppage_reasons": True}}),
+        _Resp(200, {"data": {"totals": [], "rounds": []}, "meta": {"fight_id": 59652, "source": "ufc-official", "official": None, "note": "n"}}),
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    log = api.fight_timeline(59652)
+    assert s.calls[0][0] == "GET"
+    assert s.calls[0][1].endswith("/v1/fights/59652/timeline")
+    assert s.calls[0][2] == {}
+    assert log["fouls"]["a"]["low_blows"] == 2
+    assert log["fouls"]["a"]["other"] == 1
+    assert log["fouls"]["a"]["total"] == 3
+    assert log["fouls"]["a"]["points_deducted"] == 1
+    # A ``generic`` stoppage is a foul only when a record confirms it.
+    assert log["stoppages"][0]["is_foul"] is False
+    assert log["stoppages"][0]["foul"] is None
+    assert log["stoppages"][1]["committed_by"]["fighter_id"] == 401
+    fence = log["stoppages"][2]
+    assert fence["reason"] == "generic"
+    assert fence["is_foul"] is True
+    assert fence["foul"] == "fence"
+    assert fence["foul_basis"] == "deduction"
+    assert fence["points_deducted"] == 1
+    assert fence["ended_bout"] is False
+    assert [(i["foul"], i["basis"]) for i in log["incidents"]] == [
+        ("low_blow", "log"), ("fence", "deduction"), ("low_blow", "log"),
+    ]
+    assert api.last_meta["has_stoppage_reasons"] is True
+    pos = api.fight_positions(59652)
+    assert s.calls[1][1].endswith("/v1/fights/59652/positions")
+    assert pos == {"totals": [], "rounds": []}
+    assert api.last_meta["official"] is None
+
+
+def test_fighter_discipline_and_positions_request_shapes():
+    s = _Session([
+        _Resp(200, {"data": {"tracked_fights": 10, "cage_seconds": 11549,
+                             "committed": {"total": 7, "eye_pokes": 3, "low_blows": 3, "other": 1},
+                             "drawn": {"total": 0, "eye_pokes": 0, "low_blows": 0, "other": 0},
+                             "points_deducted": 1, "stoppage_sec": 166, "fouls_per_15": 0.546,
+                             "incidents": [
+                                 {"fight_id": 59652, "date": "2023-03-18",
+                                  "event": {"slug": "ufc-286-2023-03-18", "title": "UFC 286: Edwards vs Usman 3"},
+                                  "opponent": {"slug": "kamaru-usman", "name": "Kamaru Usman"},
+                                  "role": "committed", "reason": "fence", "basis": "deduction", "round": 3,
+                                  "elapsed_sec": 90, "stoppage_sec": 48, "points_deducted": 1, "ended_bout": False},
+                                 {"fight_id": 66235, "date": "2021-03-13",
+                                  "event": {"slug": "ufc-fight-night-2021-03-13", "title": "UFC Fight Night: Edwards vs Muhammad"},
+                                  "opponent": {"slug": "belal-muhammad", "name": "Belal Muhammad"},
+                                  "role": "committed", "reason": "eye_poke", "basis": "log", "round": 2,
+                                  "elapsed_sec": 19, "stoppage_sec": None, "points_deducted": 0, "ended_bout": True},
+                             ]},
+                    "meta": {"fighter_id": 401, "source": "ufc-official", "coverage_since": "2018-12-08"}}),
+        # Under 3 tracked bouts the API answers data: null with a note.
+        _Resp(200, {"data": None, "meta": {"fighter_id": 401, "source": "ufc-official", "note": "Fewer than 3 bouts with tracked positions."}}),
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    d = api.fighter_discipline("leon-edwards")
+    assert s.calls[0][1].endswith("/v1/fighters/leon-edwards/discipline")
+    assert d["committed"]["total"] == 7
+    assert d["committed"]["other"] == 1
+    assert d["points_deducted"] == 1
+    assert [(i["reason"], i["basis"], i["points_deducted"], i["ended_bout"]) for i in d["incidents"]] == [
+        ("fence", "deduction", 1, False),
+        ("eye_poke", "log", 0, True),
+    ]
+    assert api.last_meta["coverage_since"] == "2018-12-08"
+    assert api.fighter_positions("leon-edwards") is None
+    assert s.calls[1][1].endswith("/v1/fighters/leon-edwards/positions")
+    assert "Fewer than 3" in api.last_meta["note"]
+
+
+@pytest.mark.parametrize("call", [
+    lambda api: api.fight_timeline(59652),
+    lambda api: api.fight_positions(59652),
+    lambda api: api.fighter_discipline("leon-edwards"),
+    lambda api: api.fighter_positions("leon-edwards"),
+])
+def test_feed_stats_below_pro_raises_tier_required(call):
+    s = _Session([_Resp(403, {"error": {"code": "tier_required", "message": "Fight logs, discipline and position stats need a Pro plan or higher.", "request_id": "r1"}})])
+    api = FightAPI("ufcalendar_test", session=s)
+    with pytest.raises(FightAPIError) as exc:
+        call(api)
+    assert exc.value.status == 403
+    assert exc.value.code == "tier_required"

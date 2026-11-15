@@ -63,16 +63,18 @@ history = api.fighter_history("islam-makhachev")
 | `fight_odds_history(id, from_date, to_date)` | `GET /v1/fights/{id}/odds/history` — every consensus point, oldest first (paginated; Pro plans and up) |
 | `find_fights(org, title_only, method, division, fighter, winner, from_date, to_date, main_events_only, order)` | `GET /v1/fights/search` — completed bouts, filtered, newest first (at least one narrowing filter; 25 a page, 10 pages deep) |
 | `fight_scorecards(id)` | `GET /v1/fights/{id}/scorecards` — judges, rounds, totals, deductions |
+| `fight_timeline(id)` / `fight_positions(id)` | `GET /v1/fights/{id}/timeline` / `…/positions` — settled UFC bouts: the official in-fight log (every action, referee stoppages with their reason and real length, every confirmed foul and the foul counts per corner; from June 2013, stoppage reasons from 8 December 2018) and position stats for the bout and each round (time at distance / in the clinch / on the ground, control by position, strikes by position and target; from 2007). Pro plans and up |
 | `judges(q, org, min_fights)` / `judge(id)` / `judge_scorecards(id)` | `GET /v1/judges` / `…/{id}` / `…/{id}/scorecards` (`last_meta["league"]` = baseline rates; each card row flags `lone_dissent` / `split` and lists `colleagues`) |
 | `split_decisions(org, from_date, to_date)` | `GET /v1/scorecards/splits` — split and majority decisions, newest first, with every judge's card and the dissenters named (paginated) |
 | `referees(q, org)` / `referee(slug)` / `referee_fights(slug)` | `GET /v1/referees` / `…/{slug}` / `…/{slug}/fights` — referees across the launch promotions: bouts, finish rate, method mix, average fight time; the bouts each one worked (paginated) |
 | `coverage(org)` | `GET /v1/coverage` — what the database holds per promotion per year: events, settled bouts, and the share with stats, round stats, commission scorecards and a consensus odds line |
 | `fighters(q, org, country)` / `fighter(slug, include=["bonuses", "credentials"])` | `GET /v1/fighters` / `…/{slug}` (always carries `next_fight` / `last_fight`; `bonuses` = the UFC bonus ledger; `credentials` = grappling and wrestling pedigree, gyms and coaches, each row sourced and confidence-graded) |
 | `fighter_history` / `fighter_stats` / `fighter_rankings` / `fighter_power_index` | `GET /v1/fighters/{slug}/…` |
+| `fighter_discipline(slug)` / `fighter_positions(slug)` | `GET /v1/fighters/{slug}/discipline` / `…/positions` — the confirmed fouls in a fighter's UFC bouts, committed and drawn (eye pokes and low blows from the official in-fight log, plus any other foul confirmed by the athletic commission's point deduction or by the official result; counts by kind, points deducted, every incident), and the career position profile (share of cage time by range, control for and against by position). `None` under 3 tracked bouts. Pro plans and up |
 | `rankings(org, date)` / `division_rankings(org, division)` / `champions()` | `GET /v1/rankings/…` / `/v1/champions` (entries carry `movement`, `is_new`, `country_code`; `last_meta` names the previous/next snapshot) |
 | `power_index(org, view, division, days, limit)` / `predictions_upcoming(event)` | `GET /v1/power-index/{org}` (`view`: `current` · `movers` · `peaks`) / `/v1/predictions/upcoming` |
 | `matchmaker(org, division, limit)` / `whos_next(fighter, limit)` | `GET /v1/matchmaker/{org}` / `…/next/{fighter}` — UFCalendar's matchmaker: the fights worth making (scored 0–100, per division or across the roster; not bookings), and one fighter's best next opponents with the win probability for each and the bout already booked |
-| `leaderboard(org, metric, division, country, population, limit)` / `record_book(org, division, country, population, scope, top)` | `GET /v1/stats/leaders` / `…/record-book` — the Record Book: one leaderboard (48 metrics; ties flagged, sample size on every row), or every board's top rows grouped by category |
+| `leaderboard(org, metric, division, country, population, limit)` / `record_book(org, division, country, population, scope, top)` | `GET /v1/stats/leaders` / `…/record-book` — the Record Book: one leaderboard (57 metrics (9 discipline boards need Pro+); ties flagged, sample size on every row), or every board's top rows grouped by category |
 | `org_division(org, division)` | `GET /v1/orgs/{org}/divisions/{division}` — one weight class: rankings board, upcoming bouts, latest results, roster by recency |
 | `year_stats(year, org)` | `GET /v1/stats/years/{year}` — one calendar year in numbers for one promotion (or every covered one): methods, divisions, fastest finishes, upsets, Power Index climbers, busiest fighters, countries, judges |
 | `compare(a, b)` | `GET /v1/compare` — two fighters side by side: bios, career stats, strike mix, streaks, previous meetings, common opponents, booked bout, model prediction (UFC), Power Index |
@@ -99,6 +101,42 @@ for point in api.fight_odds_history(83379):               # Pro plans and up
 
 One anonymised UFCalendar consensus line per corner across the sportsbooks we track;
 book identities are never exposed. Information only, not betting advice.
+
+## Fight log and position stats (Pro and up)
+
+```python
+log = api.fight_timeline(59652)                 # UFC 286, Edwards vs Usman
+for s in log["stoppages"]:                      # every referee stoppage; is_foul says if a record confirms a foul
+    print(s["round"], s["elapsed_sec"], s["reason"], s["duration_sec"], s["is_foul"], s["foul"], s["foul_basis"])
+for i in log["incidents"]:                      # every confirmed foul, in fight order
+    print(i["foul"], i["basis"], i["committed_by"], i["points_deducted"], i["ended_bout"])
+print(log["fouls"]["a"])                         # what corner a committed: eye_pokes, low_blows, other, total, points_deducted
+
+pos = api.fight_positions(59652)
+a = pos["totals"][0]
+print(a["time"]["distance_sec"], a["time"]["clinch_sec"], a["time"]["ground_sec"], a["control"]["total_sec"])
+
+d = api.fighter_discipline("leon-edwards")       # None under 3 tracked bouts
+print(d["committed"], d["points_deducted"], d["fouls_per_15"], len(d["incidents"]))
+for i in d["incidents"]:                         # reason is the foul; basis is the record behind it
+    print(i["date"], i["role"], i["reason"], i["basis"], i["points_deducted"], i["ended_bout"])
+p = api.fighter_positions("leon-edwards")
+print(p["time"]["distance_share"], p["control"]["for_sec"], p["control"]["against_sec"])
+```
+
+Settled UFC bouts only (Contender Series included): the log from June 2013, stoppage
+reasons from 8 December 2018, positions reliably from 2007.
+
+Fouls are confirmed fouls. The log labels only two, the eye poke and the low blow; any
+other foul (an illegal knee to a grounded opponent, an upkick, a headbutt, a bite, a fence
+grab) reaches it as a `generic` stoppage naming nobody, so it is reported only when a
+record confirms it: `log` (the labelled row), `deduction` (the athletic commission took a
+point) or `result` (the bout ended on it: a disqualification or a "could not continue").
+A `generic` stoppage with no record behind it has `is_foul` false. The fighter on a foul
+is the one who committed it. A recorded foul is not a ruling on intent.
+
+In position stats `None` means not tracked for that bout and `0` is a real zero. Below Pro these raise
+`FightAPIError` 403 `tier_required`.
 
 ## Webhooks instead of polling (Pro and up)
 
