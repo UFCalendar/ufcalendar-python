@@ -698,3 +698,24 @@ def test_feed_stats_below_pro_raises_tier_required(call):
         call(api)
     assert exc.value.status == 403
     assert exc.value.code == "tier_required"
+
+
+def test_fighters_roster_status_and_roster_routes():
+    s = _Session([
+        _Resp(200, {"data": [{"id": 346, "roster": [{"org": "ufc", "status": "off_roster"}]}], "meta": {"pagination": {"next_cursor": None}}}),
+        _Resp(200, {"data": [{"fighter": {"id": 1}}], "meta": {"pagination": {"next_cursor": "c2"}}}),
+        _Resp(200, {"data": [{"fighter": {"id": 2}}], "meta": {"pagination": {"next_cursor": None}}}),
+        _Resp(200, {"data": [{"id": 14, "kind": "left"}], "meta": {"pagination": {"next_cursor": None}}}),
+    ])
+    api = FightAPI("ufcalendar_test", session=s)
+    rows = list(api.fighters(org="ufc", roster_status="off_roster"))
+    assert rows[0]["roster"][0]["status"] == "off_roster"
+    assert s.calls[0][2] == {"org": "ufc", "roster_status": "off_roster", "limit": 100}
+    assert [r["fighter"]["id"] for r in api.roster("ufc", division="featherweight")] == [1, 2]
+    assert s.calls[1][1].endswith("/v1/rosters/ufc")
+    assert s.calls[1][2] == {"division": "featherweight", "limit": 100}
+    assert s.calls[2][2]["cursor"] == "c2"
+    moves = list(api.roster_moves("ufc", since="2026-11-01", kind="left"))
+    assert moves[0]["kind"] == "left"
+    assert s.calls[3][1].endswith("/v1/rosters/ufc/moves")
+    assert s.calls[3][2] == {"since": "2026-11-01", "kind": "left", "limit": 100}

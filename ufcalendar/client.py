@@ -146,7 +146,7 @@ class FightAPI:
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Accept": "application/json",
-                    "User-Agent": "ufcalendar-python/0.10.1",
+                    "User-Agent": "ufcalendar-python/0.11.0",
                 },
                 timeout=self._timeout,
                 allow_redirects=True,
@@ -594,9 +594,18 @@ class FightAPI:
         *,
         org: Optional[str] = None,
         country: Optional[str] = None,
+        roster_status: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> Iterator[Dict[str, Any]]:
-        return self._paginate("fighters", {"q": q, "org": org, "country": country}, limit)
+        """Roster search. Every row carries ``roster``: the promotion's own
+        published roster status, ``[{"org", "status", "since", "checked_at"}]``
+        (``status`` is ``active``, ``off_roster`` — no longer listed on the
+        roster — or ``retired``; ``[]`` when none). ``roster_status`` keeps one
+        status and needs ``org="ufc"`` (the promotion that publishes its
+        roster); without it the API answers 400 ``invalid_filter``."""
+        return self._paginate(
+            "fighters", {"q": q, "org": org, "country": country, "roster_status": roster_status}, limit
+        )
 
     def fighter(self, id_or_slug: str, *, include: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """Bio, ``records`` (career + per-org W-L-D keyed ``pro_mma`` / ``ufc`` / …),
@@ -700,6 +709,50 @@ class FightAPI:
         ``days`` (default 365), ``view="peaks"`` = all-time peak ratings;
         ``division`` (e.g. ``"lightweight"``) narrows any view."""
         return self.get(f"power-index/{org}", view=view, division=division, days=days, limit=limit)
+
+    # --------------------------------------------------------------- rosters
+
+    def roster(
+        self,
+        org: str = "ufc",
+        *,
+        status: Optional[str] = None,
+        division: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """A promotion's roster as published by the promotion (Pro plans and up).
+
+        ``status`` is ``active`` (default), ``off_roster`` (no longer listed on
+        the roster; the promotion does not say why) or ``retired``; ``division``
+        narrows to one division slug (``"featherweight"``). Each row:
+        ``fighter``, ``roster`` (``status``, ``since`` — first observed, ``None``
+        when it predates our first check — ``checked_at``, ``division``),
+        ``last_fight`` and ``next_fight``. Sorted by name; walks every page.
+        Below Pro the API answers 403 ``tier_required`` (raised as
+        :class:`FightAPIError`).
+        """
+        return self._paginate(f"rosters/{org}", {"status": status, "division": division}, limit)
+
+    def roster_moves(
+        self,
+        org: str = "ufc",
+        *,
+        since: Optional[str] = None,
+        until: Optional[str] = None,
+        kind: Optional[str] = None,
+        fighter: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Confirmed roster moves as published by the promotion, newest first
+        (Pro plans and up): ``kind`` ``signed``, ``left``, ``retired`` or
+        ``returned``, ``from_status`` / ``to_status``, and the window the move
+        happened in (``previous_checked_at`` → ``observed_at``); ``backfilled``
+        moves were reconstructed from archived profiles. ``since`` / ``until``
+        are ``YYYY-MM-DD`` (UTC) or ISO-8601; ``fighter`` is a slug or id. The
+        ``roster.changed`` webhook delivers the same object."""
+        return self._paginate(
+            f"rosters/{org}/moves", {"since": since, "until": until, "kind": kind, "fighter": fighter}, limit
+        )
 
     # ------------------------------------------------------------ matchmaker
 

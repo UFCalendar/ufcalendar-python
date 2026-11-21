@@ -68,11 +68,12 @@ history = api.fighter_history("islam-makhachev")
 | `split_decisions(org, from_date, to_date)` | `GET /v1/scorecards/splits` — split and majority decisions, newest first, with every judge's card and the dissenters named (paginated) |
 | `referees(q, org)` / `referee(slug)` / `referee_fights(slug)` | `GET /v1/referees` / `…/{slug}` / `…/{slug}/fights` — referees across the launch promotions: bouts, finish rate, method mix, average fight time; the bouts each one worked (paginated) |
 | `coverage(org)` | `GET /v1/coverage` — what the database holds per promotion per year: events, settled bouts, and the share with stats, round stats, commission scorecards and a consensus odds line |
-| `fighters(q, org, country)` / `fighter(slug, include=["bonuses", "credentials"])` | `GET /v1/fighters` / `…/{slug}` (always carries `next_fight` / `last_fight`; `bonuses` = the UFC bonus ledger; `credentials` = grappling and wrestling pedigree, gyms and coaches, each row sourced and confidence-graded) |
+| `fighters(q, org, country, roster_status)` / `fighter(slug, include=["bonuses", "credentials"])` | `GET /v1/fighters` / `…/{slug}` (every fighter carries `roster` — the promotion's own published roster status: `active`, `off_roster` = no longer listed, `retired`; `roster_status` needs `org="ufc"`; the profile always carries `next_fight` / `last_fight`; `bonuses` = the UFC bonus ledger; `credentials` = grappling and wrestling pedigree, gyms and coaches, each row sourced and confidence-graded) |
 | `fighter_history` / `fighter_stats` / `fighter_rankings` / `fighter_power_index` | `GET /v1/fighters/{slug}/…` |
 | `fighter_discipline(slug)` / `fighter_positions(slug)` | `GET /v1/fighters/{slug}/discipline` / `…/positions` — the confirmed fouls in a fighter's UFC bouts, committed and drawn (eye pokes and low blows from the official in-fight log, plus any other foul confirmed by the athletic commission's point deduction or by the official result; counts by kind, points deducted, every incident), and the career position profile (share of cage time by range, control for and against by position). `None` under 3 tracked bouts. Pro plans and up |
 | `rankings(org, date)` / `division_rankings(org, division)` / `champions()` | `GET /v1/rankings/…` / `/v1/champions` (entries carry `movement`, `is_new`, `country_code`; `last_meta` names the previous/next snapshot) |
 | `power_index(org, view, division, days, limit)` / `predictions_upcoming(event)` | `GET /v1/power-index/{org}` (`view`: `current` · `movers` · `peaks`) / `/v1/predictions/upcoming` |
+| `roster(org, status, division)` / `roster_moves(org, since, until, kind, fighter)` | `GET /v1/rosters/{org}` / `…/moves` — the UFC roster as published by the promotion (division, since, last bout, next booking; paginated), and the confirmed moves: signings, departures (no longer listed on the roster), retirements and returns, each dated by the window it happened in. Pro plans and up |
 | `matchmaker(org, division, limit)` / `whos_next(fighter, limit)` | `GET /v1/matchmaker/{org}` / `…/next/{fighter}` — UFCalendar's matchmaker: the fights worth making (scored 0–100, per division or across the roster; not bookings), and one fighter's best next opponents with the win probability for each and the bout already booked |
 | `leaderboard(org, metric, division, country, population, limit)` / `record_book(org, division, country, population, scope, top)` | `GET /v1/stats/leaders` / `…/record-book` — the Record Book: one leaderboard (57 metrics (9 discipline boards need Pro+); ties flagged, sample size on every row), or every board's top rows grouped by category |
 | `org_division(org, division)` | `GET /v1/orgs/{org}/divisions/{division}` — one weight class: rankings board, upcoming bouts, latest results, roster by recency |
@@ -83,7 +84,7 @@ history = api.fighter_history("islam-makhachev")
 | `broadcast_rights(org, country, series)` / `venue(id)` / `search(q)` / `usage()` | misc (`series="dwcs"`/`"rtufc"` = a UFC sub-series grid) |
 | `venues(q, country)` / `venue_events(id, status, from_date, to_date, order)` | `GET /v1/venues` / `…/{id}/events` — venue search, and every covered event at one venue, newest first (paginated) |
 | `articles(q, tag, locale)` / `article(slug, locale)` | `GET /v1/articles` / `…/{slug}` — UFCalendar's own editorial archive, newest first, in any of the 13 site languages (paginated), and one article's full Markdown body |
-| `create_webhook_endpoint(url, events)` … | `POST /v1/webhook-endpoints` (Pro+; kinds `event.announced`, `fight.result`, `card.changed`, `event.completed`, `odds.moved`) |
+| `create_webhook_endpoint(url, events)` … | `POST /v1/webhook-endpoints` (Pro+; kinds `event.announced`, `fight.result`, `card.changed`, `event.completed`, `odds.moved`, `roster.changed`) |
 | `calendar_ics_url(org)` | `GET /v1/calendar/{org}.ics` |
 
 Full reference: https://api.ufcalendar.com/docs · OpenAPI 3.1: https://api.ufcalendar.com/openapi.json · Also on [npm (TypeScript client)](https://www.npmjs.com/package/@ufcalendar/sdk), [RapidAPI Hub](https://rapidapi.com/ceo-SP8r6F1JT/api/ufc-and-mma-fight-data-by-ufcalendar), [Postman](https://www.postman.com/ceo-5d84eedc/workspace/ufcalendar-fight-api) and the [hosted MCP server](https://github.com/UFCalendar/ufcalendar-mcp)
@@ -148,6 +149,9 @@ print(ep["secret"])   # shown once; verify X-UFCalendar-Signature with it
 `odds.moved` fires when the consensus line on an upcoming bout moves 5+ implied-probability
 points on corner a, or the favourite flips, measured against the last line delivered, so a
 slow drift arrives once. Information only, not betting advice.
+
+`roster.changed` fires once per confirmed UFC roster move (signed, left the roster, retired,
+returned), as published by the promotion; `data` is the same object `roster_moves()` yields.
 
 ## Errors and rate limits
 
