@@ -2,7 +2,7 @@
 
     from ufcalendar import FightAPI
 
-    api = FightAPI("ufcalendar_...")            # or UFCAL_API_KEY env var
+    api = FightAPI("ufcalendar_...")            # or UFCALENDAR_API_KEY env var
     for event in api.events(org="ufc"):          # upcoming UFC cards, soonest first
         print(event["starts_at"], event["title"])
 
@@ -16,4 +16,4 @@ https://www.ufcalendar.com/developers
 from .client import FightAPI, FightAPIError
 
 __all__ = ["FightAPI", "FightAPIError"]
-__version__ = "0.11.2"
+__version__ = "0.11.3"

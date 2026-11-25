@@ -95,7 +95,8 @@ class FightAPI:
     """Client for the UFCalendar Fight API.
 
     :param api_key: ``ufcalendar_…`` key from https://www.ufcalendar.com/account/api.
-        Falls back to the ``UFCAL_API_KEY`` environment variable.
+        Falls back to the ``UFCALENDAR_API_KEY`` environment variable (the
+        older ``UFCAL_API_KEY`` is still read).
     :param base_url: override for testing; defaults to the production ``/v1``.
     :param session: optional :class:`requests.Session` to reuse connections.
     :param max_retries: how many times a GET that hit the per-minute limit
@@ -114,10 +115,10 @@ class FightAPI:
         timeout: float = _TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
     ):
-        key = api_key or os.environ.get("UFCAL_API_KEY")
+        key = api_key or os.environ.get("UFCALENDAR_API_KEY") or os.environ.get("UFCAL_API_KEY")
         if not key:
             raise ValueError(
-                "No API key. Pass api_key=... or set UFCAL_API_KEY. "
+                "No API key. Pass api_key=... or set UFCALENDAR_API_KEY. "
                 "Keys (free plan: 100 requests/month, no card) live at https://www.ufcalendar.com/account/api"
             )
         self.api_key = key
@@ -146,7 +147,7 @@ class FightAPI:
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Accept": "application/json",
-                    "User-Agent": "ufcalendar-python/0.11.2",
+                    "User-Agent": "ufcalendar-python/0.11.3",
                 },
                 timeout=self._timeout,
                 allow_redirects=True,

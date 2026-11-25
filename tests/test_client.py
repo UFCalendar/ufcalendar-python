@@ -29,9 +29,22 @@ class _Session:
 
 
 def test_requires_key(monkeypatch):
+    monkeypatch.delenv("UFCALENDAR_API_KEY", raising=False)
     monkeypatch.delenv("UFCAL_API_KEY", raising=False)
     with pytest.raises(ValueError):
         FightAPI()
+
+
+def test_reads_ufcalendar_api_key_env(monkeypatch):
+    monkeypatch.delenv("UFCAL_API_KEY", raising=False)
+    monkeypatch.setenv("UFCALENDAR_API_KEY", "ufcalendar_new")
+    assert FightAPI().api_key == "ufcalendar_new"
+
+
+def test_still_reads_legacy_env(monkeypatch):
+    monkeypatch.delenv("UFCALENDAR_API_KEY", raising=False)
+    monkeypatch.setenv("UFCAL_API_KEY", "ufcalendar_old")
+    assert FightAPI().api_key == "ufcalendar_old"
 
 
 def test_events_paginates_and_drops_none_params():

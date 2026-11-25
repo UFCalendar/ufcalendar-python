@@ -25,7 +25,7 @@ print(next(api.events(org="ufc", limit=1))["title"])   # the next UFC card
 ```python
 from ufcalendar import FightAPI
 
-api = FightAPI("ufcalendar_...")            # or export UFCAL_API_KEY=...
+api = FightAPI("ufcalendar_...")            # or export UFCALENDAR_API_KEY=...
 
 # Upcoming UFC schedule, soonest first
 for ev in api.events(org="ufc", limit=5):
