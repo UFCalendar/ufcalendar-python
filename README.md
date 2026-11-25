@@ -8,6 +8,8 @@ The [MMA Fight Data API by UFCalendar](https://www.ufcalendar.com/developers) (t
 pip install ufcalendar
 ```
 
+Reference with real responses and every method: https://mmadataapi.com/sdks/python
+
 Get a free key at https://www.ufcalendar.com/account/api?trial=1 — the free plan is 100 requests a month, no card, never expires. Paid plans from $19/month for 30,000 requests (Pro $49 for 200,000, Business $149 for 1,000,000), hard caps, no overage.
 
 ## Quickstart in 3 lines

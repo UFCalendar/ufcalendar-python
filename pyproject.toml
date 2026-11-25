@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ufcalendar"
-version = "0.11.1"
+version = "0.11.2"
 description = "MMA Fight Data API client for Python — UFC, PFL, OKTAGON, BKFC, RIZIN, KSW events, fight stats, results, rankings history, judges' scorecards and consensus odds."
 readme = "README.md"
 license = { text = "MIT" }
@@ -24,7 +24,8 @@ dependencies = ["requests>=2.28"]
 
 [project.urls]
 Homepage = "https://www.ufcalendar.com/developers"
-"Free trial" = "https://www.ufcalendar.com/account/api?trial=1"
+"Free plan" = "https://www.ufcalendar.com/account/api?trial=1"
+"Reference and examples" = "https://mmadataapi.com/sdks/python"
 Documentation = "https://api.ufcalendar.com/docs"
 "UFC data coverage" = "https://www.ufcalendar.com/developers/ufc-api"
 "OpenAPI spec" = "https://api.ufcalendar.com/openapi.json"
