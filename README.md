@@ -2,7 +2,7 @@
 
 UFC, PFL, OKTAGON, BKFC, RIZIN and KSW events, fight stats, results, rankings history and judges' scorecards from one Python client.
 
-The [MMA Fight Data API by UFCalendar](https://www.ufcalendar.com/developers) (the UFCalendar Fight API) is a REST API for MMA data: **UFC, PFL, OKTAGON, BKFC, RIZIN and KSW** events, full fight cards, results within minutes, per-fight and round-by-round statistics, complete fighter careers, the only **MMA data API with point-in-time UFC rankings history back to 2013**, and the only one serving **judges' scorecards** — every official, every round: UFC back to 1995, PFL to 2018, OKTAGON to 2025 and RIZIN 2019–2022 and from March 2026 — plus the **UFCalendar consensus odds line** (current, opening and closing on every plan, line movement on Pro). This package is a thin `requests` wrapper over it — one method per endpoint, cursor pagination handled for you.
+The [MMA Fight Data API by UFCalendar](https://www.ufcalendar.com/developers) (the UFCalendar Fight API) is a REST API for MMA data: **UFC, PFL, OKTAGON, BKFC, RIZIN and KSW** events, full fight cards, results within minutes, per-fight and round-by-round statistics, complete fighter careers, the only **MMA data API with point-in-time UFC rankings history back to 2013**, and the only one serving **judges' scorecards** — every official, every round: UFC back to 1995, PFL to 2018, OKTAGON to 2025 and RIZIN 2019–2022 and from March 2026 — plus the **UFCalendar consensus odds line** (current, opening and closing on every plan, line movement on Pro) and, on Pro and Business, a **live fight-night WebSocket** for UFC cards. This package is a thin `requests` wrapper over it — one method per endpoint, cursor pagination handled for you.
 
 ```bash
 pip install ufcalendar
@@ -60,6 +60,8 @@ history = api.fighter_history("islam-makhachev")
 | `event(slug, include=["eta", "odds"])` / `event_changes(slug)` | `GET /v1/events/{slug}` / `…/changes` (`eta` = per-bout estimated start; `odds` = each bout's latest consensus line) |
 | `event_watch(slug, country)` | `GET /v1/events/{slug}/watch` — how to watch one event, per country: the rights deals for its series merged with the event's own listings |
 | `changes(org, since, kind)` | `GET /v1/changes` — the card-change feed across every event, newest first (paginated; default last 90 days) |
+| `event_live(slug)` | `GET /v1/events/{slug}/live` — the live fight-night document of a UFC card (Contender Series included): bout order and statuses, the bout in progress (round, running clock, unofficial in-fight stats, per-round splits, a timestamped action timeline) and the last result; `None` when the card is not live. Pro and Business plans |
+| `live_stream(slug, until_final)` | the **WebSocket** `wss://live.ufcalendar.com/v1` — subscribe to a card and iterate every frame as it changes (`pip install 'ufcalendar[live]'`; Pro and Business plans) |
 | `fight(id, include=["odds"])` / `fight_stats(id)` / `fight_rounds(id)` | `GET /v1/fights/{id}` / `…/stats` / `…/rounds` (`fight_stats` lines carry `fantasy` — UFCalendar fantasy points with a per-category breakdown; `last_meta["quality"]` = data-quality flags) |
 | `fight_odds(id)` / `event_odds(slug)` | `GET /v1/fights/{id}/odds` / `GET /v1/events/{slug}/odds` — the UFCalendar consensus line: current, opening, closing (settled bouts), movement and `sources` (how many sportsbooks backed each point), plus `props` (method of victory per corner, total rounds over/under, goes the distance). Information only, not betting advice |
 | `fight_odds_history(id, from_date, to_date)` | `GET /v1/fights/{id}/odds/history` — every consensus point, oldest first (paginated; Pro plans and up) |
@@ -154,6 +156,50 @@ slow drift arrives once. Information only, not betting advice.
 
 `roster.changed` fires once per confirmed UFC roster move (signed, left the roster, retired,
 returned), as published by the promotion; `data` is the same object `roster_moves()` yields.
+
+## Live fight night (Pro and Business)
+
+On a UFC fight night (Contender Series included) the API serves one live document per
+card: bout order and statuses, the bout in progress (phase, round, running clock,
+unofficial in-fight stats, per-round splits and a timestamped action timeline) and the
+last result. Read it once with `event_live()`, or let the WebSocket push it to you on
+every change instead of polling.
+
+The socket ships as an optional extra so a REST-only install stays `requests`-thin:
+
+```bash
+pip install 'ufcalendar[live]'
+```
+
+```python
+from ufcalendar import FightAPI
+
+api = FightAPI()  # UFCALENDAR_API_KEY
+
+snap = api.event_live("ufc-331")                # None when the card is not live
+
+for frame in api.live_stream("ufc-331", until_final=True):
+    # frame["type"]: "snapshot" | "update" | "fight.final" | "event.completed" | "error"
+    state = frame.get("data")
+    if not state:
+        continue                      # nothing streaming yet
+    cur = state["current"] or {}
+    print(frame["type"], "R", cur.get("round"), cur.get("clock_sec"))
+```
+
+Under the hood: connect to `wss://live.ufcalendar.com/v1?key=<key>`, send
+`{"action": "subscribe", "event": "<slug or id>"}`, and every frame is
+`{"type": …, "data": <LiveState>}` (`{"action": "ping"}` answers `{"type": "pong"}`).
+`until_final=True` stops after the first `fight.final` frame; the default runs until
+the socket ends. A dropped connection is re-subscribed once automatically. A Pro key
+may hold 2 sockets at once, a Business key 5; below Pro `event_live()` raises
+`FightAPIError` 403 `tier_required` and the socket upgrade is refused.
+
+In-fight numbers are unofficial. The official result and totals land on `fight(id)` /
+`fight_stats(id)` when the bout is settled.
+
+Runnable ticker: [`examples/live_ticker.py`](examples/live_ticker.py) prints
+`R2 3:41 · Oliveira 41 vs Makhachev 37 sig. strikes` as the round unfolds.
 
 ## Errors and rate limits
 

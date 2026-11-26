@@ -16,16 +16,23 @@ receive must be displayed as a credit.
 
 from __future__ import annotations
 
+import contextlib
+import json as _json
 import os
 import random
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any, Dict, Iterator, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence
+from urllib.parse import quote
 
 import requests
 
 DEFAULT_BASE_URL = "https://api.ufcalendar.com/v1"
+#: The live fight-night WebSocket (UFC cards incl. the Contender Series, Pro and
+#: Business plans). Same document as ``GET /v1/events/{id}/live``, pushed on
+#: every change.
+LIVE_WS_URL = "wss://live.ufcalendar.com/v1"
 _TIMEOUT = 30
 #: Default number of times a GET that hit the per-minute limit is retried.
 DEFAULT_MAX_RETRIES = 3
@@ -45,6 +52,18 @@ class FightAPIError(Exception):
         self.code = code
         self.message = message
         self.request_id = request_id
+
+
+def _connect_websocket(url: str) -> Any:
+    """Open the live socket with the optional ``websocket-client`` dependency."""
+    try:
+        from websocket import create_connection  # type: ignore[import-not-found]
+    except ImportError as exc:  # pragma: no cover - exercised with a patched import
+        raise ImportError(
+            "live_stream() needs a WebSocket client, which ships as an optional extra. "
+            "Install it with: pip install 'ufcalendar[live]'"
+        ) from exc
+    return create_connection(url, timeout=_TIMEOUT)
 
 
 def _bool_param(v: Optional[bool]) -> Optional[str]:
@@ -147,7 +166,7 @@ class FightAPI:
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Accept": "application/json",
-                    "User-Agent": "ufcalendar-python/0.11.3",
+                    "User-Agent": "ufcalendar-python/0.12.0",
                 },
                 timeout=self._timeout,
                 allow_redirects=True,
@@ -328,6 +347,87 @@ class FightAPI:
         row carries its ``event`` (id, slug, title, org, starts_at).
         """
         return self._paginate("changes", {"org": org, "since": since, "kind": kind}, limit)
+
+    def event_live(self, id_or_slug: str) -> Optional[Dict[str, Any]]:
+        """The live fight-night document of one UFC card (Pro and Business plans).
+
+        A LiveState snapshot — the card in order with each bout's status, the
+        bout in progress (phase, round, running clock, unofficial in-fight
+        statistics, per-round splits and a timestamped action timeline) and
+        the last result — or ``None`` when the card is not live. In-fight
+        numbers are unofficial; the settled figures live on :meth:`fight` /
+        :meth:`fight_stats`. The WebSocket at ``wss://live.ufcalendar.com/v1``
+        pushes the same document as it changes — see :meth:`live_stream`.
+        Below Pro the API answers 403 ``tier_required`` (raised as
+        :class:`FightAPIError`).
+        """
+        return self.get(f"events/{id_or_slug}/live")
+
+    def live_stream(
+        self,
+        event: str,
+        *,
+        until_final: bool = False,
+        url: str = LIVE_WS_URL,
+        connect: Optional[Callable[[str], Any]] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Subscribe to the live fight-night WebSocket and yield every frame (Pro and Business plans).
+
+        Connects to ``wss://live.ufcalendar.com/v1?key=…``, sends
+        ``{"action": "subscribe", "event": <slug or id>}`` and yields each
+        frame as a dict — ``{"type": "snapshot" | "update" | "fight.final" |
+        "event.completed", "data": <LiveState>}``. ``data`` is the same
+        document :meth:`event_live` returns (``None`` until the card goes
+        live). A refused request arrives as ``{"type": "error", "code": …,
+        "message": …}``. In-fight numbers are unofficial until the bout is
+        settled on :meth:`fight`.
+
+            for frame in api.live_stream("ufc-331", until_final=True):
+                print(frame["type"])
+
+        :param event: event slug or our event id.
+        :param until_final: stop after the first ``fight.final`` frame.
+            Default False — the generator runs until the socket ends.
+        :param connect: inject a connector for tests. Defaults to
+            ``websocket.create_connection`` from the optional ``websocket-client``
+            dependency: ``pip install 'ufcalendar[live]'``.
+
+        A dropped socket is reconnected (and re-subscribed) ONCE; a second
+        drop raises, so a caller that wants an all-night ticker should wrap
+        this in its own retry loop. Pro keys may hold 2 sockets at once,
+        Business keys 5; below Pro the upgrade is refused.
+        """
+        opener = connect or _connect_websocket
+        target = f"{url}?key={quote(self.api_key, safe='')}"
+        reconnects = 0
+        while True:
+            sock = opener(target)
+            try:
+                sock.send(_json.dumps({"action": "subscribe", "event": event}))
+                while True:
+                    raw = sock.recv()
+                    if raw is None or raw == "" or raw == b"":
+                        raise ConnectionError("live stream closed by the server")
+                    if isinstance(raw, (bytes, bytearray)):
+                        raw = raw.decode("utf-8", "replace")
+                    try:
+                        frame = _json.loads(raw)
+                    except ValueError:
+                        continue  # a half-frame is not worth killing the night over
+                    if not isinstance(frame, dict):
+                        continue
+                    yield frame
+                    if until_final and frame.get("type") == "fight.final":
+                        return
+            except GeneratorExit:
+                raise
+            except Exception:
+                if reconnects >= 1:
+                    raise
+                reconnects += 1
+            finally:
+                with contextlib.suppress(Exception):
+                    sock.close()
 
     def fight(self, fight_id: int, *, include: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """One bout with its result and a compact ``event``.
